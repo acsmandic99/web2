@@ -1,0 +1,13 @@
+.vs/
+[Bb]in/
+[Oo]bj/
+[Pp]kg/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.pdb
+*.exe
+*.dll
+TravelPlannerApp/pkg/
+TravelPlannerApp/PublishProfiles/
