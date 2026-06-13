@@ -9,6 +9,6 @@ namespace TravelPlanner.Common.DTOs.Trip
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public double EstimatedBudget { get; set; }
-        public Guid UserId { get; set; }
+        public string GeneralNotes { get; set; }
     }
 }

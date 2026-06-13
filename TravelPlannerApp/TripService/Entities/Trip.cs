@@ -11,5 +11,6 @@ namespace TripService.Entities
         public DateTime EndDate { get; set; }
         public double EstimatedBudget { get; set; }
         public Guid UserId { get; set; }
+        public string GeneralNotes { get; set; }
     }
 }

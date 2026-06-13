@@ -2,8 +2,8 @@
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using System;
 using System.Threading.Tasks;
-using TravelPlanner.Common.DTOs.Auth;
 using TravelPlanner.Common.Interfaces;
+using TravelPlanner.Common.DTOs.Auth;
 
 namespace BackendSF.Controllers
 {
@@ -14,43 +14,17 @@ namespace BackendSF.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] UserRegisterDto request)
         {
-            try
-            {
-                var userService = ServiceProxy.Create<IUserService>(new Uri("fabric:/TravelPlannerApp/UserService"));
-                var response = await userService.RegisterUserAsync(request);
-
-                if (response.IsSuccess)
-                {
-                    return Ok(response);
-                }
-
-                return BadRequest(response);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.Message);
-            }
+            var userService = ServiceProxy.Create<IUserService>(new Uri("fabric:/TravelPlannerApp/UserService"));
+            var result = await userService.RegisterUserAsync(request);
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] UserLoginDto request)
         {
-            try
-            {
-                var userService = ServiceProxy.Create<IUserService>(new Uri("fabric:/TravelPlannerApp/UserService"));
-                var response = await userService.LoginUserAsync(request);
-
-                if (response.IsSuccess)
-                {
-                    return Ok(response);
-                }
-
-                return BadRequest(response);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.Message);
-            }
+            var userService = ServiceProxy.Create<IUserService>(new Uri("fabric:/TravelPlannerApp/UserService"));
+            var result = await userService.LoginUserAsync(request);
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
     }
 }

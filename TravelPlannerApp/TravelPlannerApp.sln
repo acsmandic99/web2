@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UserService", "UserService\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TripService", "TripService\TripService.csproj", "{846126F6-B534-4745-8841-2FB135F5399A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ActivityService", "ActivityService\ActivityService.csproj", "{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -65,6 +67,14 @@ Global
 		{846126F6-B534-4745-8841-2FB135F5399A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{846126F6-B534-4745-8841-2FB135F5399A}.Release|x64.ActiveCfg = Release|Any CPU
 		{846126F6-B534-4745-8841-2FB135F5399A}.Release|x64.Build.0 = Release|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Debug|x64.Build.0 = Debug|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Release|x64.ActiveCfg = Release|Any CPU
+		{30FDFA1C-6DEB-40B1-9D5E-5CD6D6A3E836}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,18 +1,20 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.ServiceFabric.Services.Communication.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Fabric;
+using System.IO;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
-using TravelPlanner.Common.DTOs.Auth;
+using Microsoft.IdentityModel.Tokens;
 using TravelPlanner.Common.Interfaces;
+using TravelPlanner.Common.DTOs.Auth;
+using TravelPlanner.Common.DTOs.Shared;
 using UserService.Data;
 using UserService.Entities;
 
@@ -22,8 +24,8 @@ namespace UserService
     {
         private readonly UserDbContextFactory _contextFactory;
         private readonly IConfigurationRoot _configuration;
-        public UserService(StatelessServiceContext context)
-            : base(context)
+
+        public UserService(StatelessServiceContext context) : base(context)
         {
             _contextFactory = new UserDbContextFactory();
             _configuration = new ConfigurationBuilder()
@@ -33,18 +35,14 @@ namespace UserService
                 .Build();
         }
 
-        public async Task<AuthResponseDto> RegisterUserAsync(UserRegisterDto request)
+        public async Task<ResultDto<bool>> RegisterUserAsync(UserRegisterDto request)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
 
             var userExists = await dbContext.Users.AnyAsync(u => u.Name == request.Username || u.Email == request.Email);
             if (userExists)
             {
-                return new AuthResponseDto
-                {
-                    IsSuccess = false,
-                    Message = "Username or email is already taken."
-                };
+                return ResultDto<bool>.Failure("Username or email is already taken.");
             }
 
             var newUser = new User
@@ -60,35 +58,21 @@ namespace UserService
             dbContext.Users.Add(newUser);
             await dbContext.SaveChangesAsync();
 
-            return new AuthResponseDto
-            {
-                IsSuccess = true,
-                Message = "User registered successfully."
-            };
+            return ResultDto<bool>.Success(true, "User registered successfully.");
         }
 
-        public async Task<AuthResponseDto> LoginUserAsync(UserLoginDto request)
+        public async Task<ResultDto<string>> LoginUserAsync(UserLoginDto request)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
 
             var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Name == request.Username);
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             {
-                return new AuthResponseDto
-                {
-                    IsSuccess = false,
-                    Message = "Invalid username or password."
-                };
+                return ResultDto<string>.Failure("Invalid username or password.");
             }
 
             string token = GenerateJwtToken(user);
-
-            return new AuthResponseDto
-            {
-                IsSuccess = true,
-                Token = token,
-                Message = "Login successful."
-            };
+            return ResultDto<string>.Success(token, "Login successful.");
         }
 
         private string GenerateJwtToken(User user)
