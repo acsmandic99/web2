@@ -1,0 +1,28 @@
+# --- .NET (Visual Studio / C#) ---
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.db
+
+
+
+# --- Environment & Secrets ---
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+
+# --- OS / IDE ---
+.DS_Store
+.idea/
+.vscode/
+*.log
+Thumbs.db
