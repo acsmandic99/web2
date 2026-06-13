@@ -11,7 +11,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
-using TravelPlanner.Common;
+using TravelPlanner.Common.DTOs.Auth;
+using TravelPlanner.Common.Interfaces;
 using UserService.Data;
 using UserService.Entities;
 

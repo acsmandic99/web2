@@ -2,7 +2,8 @@
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using System;
 using System.Threading.Tasks;
-using TravelPlanner.Common;
+using TravelPlanner.Common.DTOs.Auth;
+using TravelPlanner.Common.Interfaces;
 
 namespace BackendSF.Controllers
 {

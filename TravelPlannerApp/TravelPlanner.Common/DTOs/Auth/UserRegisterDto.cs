@@ -1,4 +1,4 @@
-﻿namespace TravelPlanner.Common
+﻿namespace TravelPlanner.Common.DTOs.Auth
 {
     public class UserRegisterDto
     {
