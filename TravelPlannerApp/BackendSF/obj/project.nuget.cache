@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "dgSpecHash": "pz6KnCykjT0=",
+  "success": true,
+  "projectFilePath": "E:\\Users\\Documents\\web2\\Projekat\\TravelPlannerApp\\BackendSF\\BackendSF.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.extensions.apidescription.server\\8.0.0\\microsoft.extensions.apidescription.server.8.0.0.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.openapi\\2.7.5\\microsoft.openapi.2.7.5.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric\\11.4.268\\microsoft.servicefabric.11.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.aspnetcore.abstractions\\8.4.268\\microsoft.servicefabric.aspnetcore.abstractions.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.aspnetcore.kestrel\\8.4.268\\microsoft.servicefabric.aspnetcore.kestrel.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.data\\8.4.268\\microsoft.servicefabric.data.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.data.extensions\\8.4.268\\microsoft.servicefabric.data.extensions.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.data.interfaces\\8.4.268\\microsoft.servicefabric.data.interfaces.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.diagnostics.internal\\8.4.268\\microsoft.servicefabric.diagnostics.internal.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.fabrictransport.internal\\8.4.268\\microsoft.servicefabric.fabrictransport.internal.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.services\\8.4.268\\microsoft.servicefabric.services.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.servicefabric.services.remoting\\8.4.268\\microsoft.servicefabric.services.remoting.8.4.268.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\swashbuckle.aspnetcore\\10.2.1\\swashbuckle.aspnetcore.10.2.1.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\swashbuckle.aspnetcore.swagger\\10.2.1\\swashbuckle.aspnetcore.swagger.10.2.1.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\swashbuckle.aspnetcore.swaggergen\\10.2.1\\swashbuckle.aspnetcore.swaggergen.10.2.1.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\swashbuckle.aspnetcore.swaggerui\\10.2.1\\swashbuckle.aspnetcore.swaggerui.10.2.1.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\system.text.json\\8.0.5\\system.text.json.8.0.5.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.19\\microsoft.aspnetcore.app.runtime.win-x64.8.0.19.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.19\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.19.nupkg.sha512",
+    "C:\\Users\\Milos\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.19\\microsoft.netcore.app.runtime.win-x64.8.0.19.nupkg.sha512"
+  ],
+  "logs": []
+}
