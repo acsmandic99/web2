@@ -2,6 +2,7 @@ using Microsoft.ServiceFabric.Services.Communication.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
+using Microsoft.ServiceFabric.Services.Client;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -38,11 +39,14 @@ namespace ActivityService
 
             if (requiresEdit)
             {
-                var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
-                var access = await shareService.CheckAccessAsync(tripId, userId);
-                if (tripResult.Data.UserId != userId && (!access.IsSuccess || access.Data != "Edit"))
+                if (tripResult.Data.UserId != userId)
                 {
-                    return "You do not have permission to modify data on this trip plan.";
+                    var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+                    var access = await shareService.CheckAccessAsync(tripId, userId);
+                    if (!access.IsSuccess || access.Data != "Edit")
+                    {
+                        return "You do not have permission to modify data on this trip plan.";
+                    }
                 }
             }
 

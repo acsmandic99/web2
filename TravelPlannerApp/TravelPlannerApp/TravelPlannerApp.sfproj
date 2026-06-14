@@ -41,6 +41,7 @@
       <ServiceLaunchUrl>http://localhost:{ServicePort}/swagger</ServiceLaunchUrl>
     </ProjectReference>
     <ProjectReference Include="..\ExpenseService\ExpenseService.csproj" />
+    <ProjectReference Include="..\NotificationService\NotificationService.csproj" />
     <ProjectReference Include="..\ShareService\ShareService.csproj" />
     <ProjectReference Include="..\TripService\TripService.csproj" />
     <ProjectReference Include="..\UserService\UserService.csproj" />

@@ -1,17 +1,18 @@
-using Microsoft.ServiceFabric.Services.Communication.Runtime;
-using Microsoft.ServiceFabric.Services.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.ServiceFabric.Services.Client;
+using Microsoft.ServiceFabric.Services.Communication.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Client;
+using Microsoft.ServiceFabric.Services.Remoting.Runtime;
+using Microsoft.ServiceFabric.Services.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Fabric;
 using System.Linq;
 using System.Threading.Tasks;
-using TravelPlanner.Common.Interfaces;
-using TravelPlanner.Common.DTOs.Trip;
 using TravelPlanner.Common.DTOs.Destination;
 using TravelPlanner.Common.DTOs.Shared;
+using TravelPlanner.Common.DTOs.Trip;
+using TravelPlanner.Common.Interfaces;
 using TripService.Data;
 using TripService.Entities;
 using TripService.Mappings;
@@ -34,7 +35,7 @@ namespace TripService
             if (trip == null) return false;
             if (trip.UserId == userId) return true;
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
             var access = await shareService.CheckAccessAsync(tripId, userId);
 
             if (!access.IsSuccess) return false;
@@ -69,7 +70,7 @@ namespace TripService
 
             try
             {
-                var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+                var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
                 var allTrips = await dbContext.Trips.ToListAsync();
 
                 foreach (var trip in allTrips)
@@ -174,14 +175,14 @@ namespace TripService
 
         public async Task<ResultDto<DestinationDto>> UpdateDestinationAsync(Guid id, CreateDestinationDto d, Guid userId)
         {
-            if (!await HasAccessAsync(d.TripId, userId, true))
-            {
-                return ResultDto<DestinationDto>.Failure("No permission to modify destinations on this trip.");
-            }
-
             using var dbContext = _contextFactory.CreateDbContext(null);
             var existing = await dbContext.Destinations.FirstOrDefaultAsync(x => x.Id == id);
             if (existing == null) return ResultDto<DestinationDto>.Failure("Destination not found.");
+
+            if (!await HasAccessAsync(existing.TripId, userId, true))
+            {
+                return ResultDto<DestinationDto>.Failure("No permission to modify destinations on this trip.");
+            }
 
             existing.Name = d.Name;
             existing.Location = d.Location;
@@ -207,6 +208,11 @@ namespace TripService
             dbContext.Destinations.Remove(existing);
             await dbContext.SaveChangesAsync();
             return ResultDto<bool>.Success(true, "Destination deleted successfully.");
+        }
+
+        protected override IEnumerable<ServiceInstanceListener> CreateServiceInstanceListeners()
+        {
+            return this.CreateServiceRemotingInstanceListeners();
         }
     }
 }

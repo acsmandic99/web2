@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
+using Microsoft.ServiceFabric.Services.Client;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -25,7 +26,7 @@ namespace BackendSF.Controllers
             return Ok(await tripService.GetUserTripsAsync(userId));
         }
 
-        [HttpGet("{id}/")]
+        [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -75,7 +76,7 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
             var result = await shareService.GenerateShareTokenAsync(id, accessLevel, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -86,7 +87,7 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
             var result = await shareService.ClaimShareTokenAsync(token, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }

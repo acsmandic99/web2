@@ -22,7 +22,7 @@ namespace BackendSF.Controllers
 
             var activityService = ServiceProxy.Create<IActivityService>(new Uri("fabric:/TravelPlannerApp/ActivityService"));
             var result = await activityService.GetTripActivitiesAsync(tripId, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return Ok(result);
         }
 
         [HttpPost]

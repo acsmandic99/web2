@@ -1,19 +1,21 @@
-using Microsoft.ServiceFabric.Services.Communication.Runtime;
-using Microsoft.ServiceFabric.Services.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Client;
+using ExpenseService.Data;
+using ExpenseService.Entities;
+using ExpenseService.Mappings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.ServiceFabric.Services.Client;
+using Microsoft.ServiceFabric.Services.Communication.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Client;
+using Microsoft.ServiceFabric.Services.Remoting.Runtime;
+using Microsoft.ServiceFabric.Services.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Fabric;
 using System.Linq;
 using System.Threading.Tasks;
-using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Expense;
+using TravelPlanner.Common.DTOs.Notification;
 using TravelPlanner.Common.DTOs.Shared;
-using ExpenseService.Data;
-using ExpenseService.Entities;
-using ExpenseService.Mappings;
+using TravelPlanner.Common.Interfaces;
 
 namespace ExpenseService
 {
@@ -33,7 +35,7 @@ namespace ExpenseService
             if (!tripResult.IsSuccess || tripResult.Data == null) return false;
             if (tripResult.Data.UserId == userId) return true;
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
             var access = await shareService.CheckAccessAsync(tripId, userId);
             if (!access.IsSuccess) return false;
 
@@ -62,6 +64,21 @@ namespace ExpenseService
 
             dbContext.Expenses.Add(newExpense);
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new Microsoft.ServiceFabric.Services.Client.ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = "ExpenseAdded",
+                    Message = $"New expense recorded: {newExpense.Title} ({newExpense.Amount} EUR) for Trip {newExpense.TripId}",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<ExpenseDto>.Success(newExpense.MapToDto(), "Expense recorded successfully.");
         }
 
@@ -118,14 +135,14 @@ namespace ExpenseService
 
         public async Task<ResultDto<ExpenseDto>> UpdateExpenseAsync(Guid expenseId, CreateExpenseDto expense, Guid userId)
         {
-            if (!await CheckAccessAsync(expense.TripId, userId, true))
-            {
-                return ResultDto<ExpenseDto>.Failure("No permission to modify financials on this trip.");
-            }
-
             using var dbContext = _contextFactory.CreateDbContext(null);
             var existing = await dbContext.Expenses.FirstOrDefaultAsync(e => e.Id == expenseId);
             if (existing == null) return ResultDto<ExpenseDto>.Failure("Expense record not found.");
+
+            if (!await CheckAccessAsync(existing.TripId, userId, true))
+            {
+                return ResultDto<ExpenseDto>.Failure("No permission to modify financials on this trip.");
+            }
 
             existing.Title = expense.Title;
             existing.Category = expense.Category;
