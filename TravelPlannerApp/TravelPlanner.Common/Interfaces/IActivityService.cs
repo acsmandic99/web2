@@ -9,9 +9,9 @@ namespace TravelPlanner.Common.Interfaces
 {
     public interface IActivityService : IService
     {
-        Task<ResultDto<ActivityDto>> AddActivityAsync(CreateActivityDto activity);
-        Task<ResultDto<List<ActivityDto>>> GetTripActivitiesAsync(Guid tripId);
-        Task<ResultDto<bool>> UpdateActivityAsync(Guid activityId, CreateActivityDto activity);
-        Task<ResultDto<bool>> RemoveActivityAsync(Guid activityId);
+        Task<ResultDto<ActivityDto>> AddActivityAsync(CreateActivityDto activity, Guid userId);
+        Task<ResultDto<List<ActivityDto>>> GetTripActivitiesAsync(Guid tripId, Guid userId);
+        Task<ResultDto<bool>> UpdateActivityAsync(Guid activityId, CreateActivityDto activity, Guid userId);
+        Task<ResultDto<bool>> RemoveActivityAsync(Guid activityId, Guid userId);
     }
 }

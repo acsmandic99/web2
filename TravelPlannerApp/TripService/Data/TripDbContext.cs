@@ -9,6 +9,7 @@ namespace TripService.Data
 
         public DbSet<Trip> Trips => Set<Trip>();
         public DbSet<Destination> Destinations => Set<Destination>();
+        public DbSet<TripShare> TripShares => Set<TripShare>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -35,6 +36,14 @@ namespace TripService.Data
                 entity.Property(d => d.ArrivalDate).IsRequired();
                 entity.Property(d => d.DepartureDate).IsRequired();
                 entity.Property(d => d.TripId).IsRequired();
+            });
+
+            modelBuilder.Entity<TripShare>(entity =>
+            {
+                entity.HasKey(s => s.Id);
+                entity.Property(s => s.Token).IsRequired().HasMaxLength(255);
+                entity.Property(s => s.AccessLevel).IsRequired();
+                entity.Property(s => s.TripId).IsRequired();
             });
         }
     }

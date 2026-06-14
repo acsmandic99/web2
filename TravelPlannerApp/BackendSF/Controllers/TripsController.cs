@@ -6,9 +6,11 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Trip;
+using TravelPlanner.Common.Enums;
 
 namespace BackendSF.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/trips")]
     public class TripsController : ControllerBase
@@ -16,20 +18,24 @@ namespace BackendSF.Controllers
         [HttpGet("user/{userId}")]
         public async Task<IActionResult> GetUserTrips(Guid userId)
         {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || Guid.Parse(userIdClaim) != userId) return Unauthorized();
+
             var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
-            var result = await tripService.GetUserTripsAsync(userId);
-            return Ok(result);
+            return Ok(await tripService.GetUserTripsAsync(userId));
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}/")]
         public async Task<IActionResult> GetById(Guid id)
         {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
+
             var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
-            var result = await tripService.GetTripByIdAsync(id);
-            return result.IsSuccess ? Ok(result) : NotFound(result);
+            var result = await tripService.GetTripByIdAsync(id, Guid.Parse(userIdClaim));
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
-        [Authorize]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateTripDto request)
         {
@@ -41,21 +47,47 @@ namespace BackendSF.Controllers
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
-        [Authorize]
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] CreateTripDto request)
         {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
+
             var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
-            var result = await tripService.UpdateTripAsync(id, request);
+            var result = await tripService.UpdateTripAsync(id, request, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
-        [Authorize]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
+
             var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
-            var result = await tripService.DeleteTripAsync(id);
+            var result = await tripService.DeleteTripAsync(id, Guid.Parse(userIdClaim));
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpPost("{id}/share")]
+        public async Task<IActionResult> Share(Guid id, [FromQuery] ShareAccessLevel accessLevel)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
+
+            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+            var result = await shareService.GenerateShareTokenAsync(id, accessLevel, Guid.Parse(userIdClaim));
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpPost("share/claim/{token}")]
+        public async Task<IActionResult> ClaimShare(string token)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
+
+            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+            var result = await shareService.ClaimShareTokenAsync(token, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
     }

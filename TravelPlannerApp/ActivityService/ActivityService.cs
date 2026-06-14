@@ -26,14 +26,24 @@ namespace ActivityService
             _contextFactory = new ActivityDbContextFactory();
         }
 
-        private async Task<string> ValidateActivityDateAsync(Guid tripId, DateTime scheduledAt)
+        private async Task<string> ValidateActivityAccessAndDatesAsync(Guid tripId, DateTime scheduledAt, Guid userId, bool requiresEdit)
         {
             var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
-            var tripResult = await tripService.GetTripByIdAsync(tripId);
+            var tripResult = await tripService.GetTripByIdAsync(tripId, userId);
 
             if (!tripResult.IsSuccess || tripResult.Data == null)
             {
-                return "The connected trip does not exist.";
+                return "Access denied or trip does not exist.";
+            }
+
+            if (requiresEdit)
+            {
+                var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+                var access = await shareService.CheckAccessAsync(tripId, userId);
+                if (tripResult.Data.UserId != userId && (!access.IsSuccess || access.Data != "Edit"))
+                {
+                    return "You do not have permission to modify data on this trip plan.";
+                }
             }
 
             var trip = tripResult.Data;
@@ -45,9 +55,9 @@ namespace ActivityService
             return null;
         }
 
-        public async Task<ResultDto<ActivityDto>> AddActivityAsync(CreateActivityDto a)
+        public async Task<ResultDto<ActivityDto>> AddActivityAsync(CreateActivityDto a, Guid userId)
         {
-            var validationError = await ValidateActivityDateAsync(a.TripId, a.ScheduledAt);
+            var validationError = await ValidateActivityAccessAndDatesAsync(a.TripId, a.ScheduledAt, userId, true);
             if (validationError != null)
             {
                 return ResultDto<ActivityDto>.Failure(validationError);
@@ -71,21 +81,27 @@ namespace ActivityService
             return ResultDto<ActivityDto>.Success(activity.MapToDto(), "Activity added successfully.");
         }
 
-        public async Task<ResultDto<List<ActivityDto>>> GetTripActivitiesAsync(Guid tripId)
+        public async Task<ResultDto<List<ActivityDto>>> GetTripActivitiesAsync(Guid tripId, Guid userId)
         {
+            var validationError = await ValidateActivityAccessAndDatesAsync(tripId, DateTime.UtcNow, userId, false);
+            if (validationError != null && validationError.Contains("Access denied"))
+            {
+                return ResultDto<List<ActivityDto>>.Failure("Access denied.");
+            }
+
             using var dbContext = _contextFactory.CreateDbContext(null);
             var activities = await dbContext.Activities.Where(a => a.TripId == tripId).ToListAsync();
             var dtos = activities.Select(a => a.MapToDto()).ToList();
             return ResultDto<List<ActivityDto>>.Success(dtos, "Activities retrieved successfully.");
         }
 
-        public async Task<ResultDto<bool>> UpdateActivityAsync(Guid id, CreateActivityDto a)
+        public async Task<ResultDto<bool>> UpdateActivityAsync(Guid id, CreateActivityDto a, Guid userId)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
             var existing = await dbContext.Activities.FirstOrDefaultAsync(x => x.Id == id);
             if (existing == null) return ResultDto<bool>.Failure("Activity not found.");
 
-            var validationError = await ValidateActivityDateAsync(existing.TripId, a.ScheduledAt);
+            var validationError = await ValidateActivityAccessAndDatesAsync(existing.TripId, a.ScheduledAt, userId, true);
             if (validationError != null)
             {
                 return ResultDto<bool>.Failure(validationError);
@@ -102,13 +118,19 @@ namespace ActivityService
             return ResultDto<bool>.Success(true, "Activity updated successfully.");
         }
 
-        public async Task<ResultDto<bool>> RemoveActivityAsync(Guid id)
+        public async Task<ResultDto<bool>> RemoveActivityAsync(Guid id, Guid userId)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
             var existing = await dbContext.Activities.FirstOrDefaultAsync(x => x.Id == id);
             if (existing == null) return ResultDto<bool>.Failure("Activity not found.");
 
-            dbContext.Remove(existing);
+            var validationError = await ValidateActivityAccessAndDatesAsync(existing.TripId, existing.ScheduledAt, userId, true);
+            if (validationError != null && validationError.Contains("permission"))
+            {
+                return ResultDto<bool>.Failure(validationError);
+            }
+
+            dbContext.Activities.Remove(existing);
             await dbContext.SaveChangesAsync();
             return ResultDto<bool>.Success(true, "Activity removed successfully.");
         }

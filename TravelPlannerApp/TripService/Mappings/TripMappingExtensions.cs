@@ -1,5 +1,4 @@
-﻿using System;
-using TravelPlanner.Common.DTOs.Trip;
+﻿using TravelPlanner.Common.DTOs.Trip;
 using TravelPlanner.Common.DTOs.Destination;
 using TripService.Entities;
 
@@ -33,6 +32,18 @@ namespace TripService.Mappings
                 DepartureDate = d.DepartureDate,
                 Notes = d.Notes,
                 TripId = d.TripId
+            };
+        }
+
+        public static TripShareDto MapToDto(this TripShare s)
+        {
+            return new TripShareDto
+            {
+                Id = s.Id,
+                TripId = s.TripId,
+                Token = s.Token,
+                AccessLevel = s.AccessLevel,
+                ClaimedByUserId = s.ClaimedByUserId
             };
         }
     }

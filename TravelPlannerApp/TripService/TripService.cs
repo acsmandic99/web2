@@ -1,6 +1,7 @@
 using Microsoft.ServiceFabric.Services.Communication.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -26,6 +27,21 @@ namespace TripService
             _contextFactory = new TripDbContextFactory();
         }
 
+        private async Task<bool> HasAccessAsync(Guid tripId, Guid userId, bool requiresEdit)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var trip = await dbContext.Trips.FirstOrDefaultAsync(t => t.Id == tripId);
+            if (trip == null) return false;
+            if (trip.UserId == userId) return true;
+
+            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+            var access = await shareService.CheckAccessAsync(tripId, userId);
+
+            if (!access.IsSuccess) return false;
+            if (requiresEdit) return access.Data == "Edit";
+            return access.Data == "Edit" || access.Data == "View";
+        }
+
         public async Task<ResultDto<TripDto>> CreateTripAsync(CreateTripDto trip, Guid userId)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
@@ -48,21 +64,51 @@ namespace TripService
         public async Task<ResultDto<List<TripDto>>> GetUserTripsAsync(Guid userId)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
-            var trips = await dbContext.Trips.Where(t => t.UserId == userId).ToListAsync();
-            var dtos = trips.Select(t => t.MapToDto()).ToList();
-            return ResultDto<List<TripDto>>.Success(dtos, "User trips retrieved successfully.");
+            var ownedTrips = await dbContext.Trips.Where(t => t.UserId == userId).ToListAsync();
+            var ownedDtos = ownedTrips.Select(t => t.MapToDto()).ToList();
+
+            try
+            {
+                var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"));
+                var allTrips = await dbContext.Trips.ToListAsync();
+
+                foreach (var trip in allTrips)
+                {
+                    if (trip.UserId == userId) continue;
+                    var access = await shareService.CheckAccessAsync(trip.Id, userId);
+                    if (access.IsSuccess && access.Data != "None")
+                    {
+                        ownedDtos.Add(trip.MapToDto());
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return ResultDto<List<TripDto>>.Success(ownedDtos, "User trips retrieved successfully.");
         }
 
-        public async Task<ResultDto<TripDto>> GetTripByIdAsync(Guid tripId)
+        public async Task<ResultDto<TripDto>> GetTripByIdAsync(Guid tripId, Guid userId)
         {
+            if (!await HasAccessAsync(tripId, userId, false))
+            {
+                return ResultDto<TripDto>.Failure("Access denied to this trip.");
+            }
+
             using var dbContext = _contextFactory.CreateDbContext(null);
             var t = await dbContext.Trips.FirstOrDefaultAsync(trip => trip.Id == tripId);
             if (t == null) return ResultDto<TripDto>.Failure("Trip not found.");
             return ResultDto<TripDto>.Success(t.MapToDto(), "Trip retrieved successfully.");
         }
 
-        public async Task<ResultDto<TripDto>> UpdateTripAsync(Guid tripId, CreateTripDto trip)
+        public async Task<ResultDto<TripDto>> UpdateTripAsync(Guid tripId, CreateTripDto trip, Guid userId)
         {
+            if (!await HasAccessAsync(tripId, userId, true))
+            {
+                return ResultDto<TripDto>.Failure("You do not have permission to modify this trip.");
+            }
+
             using var dbContext = _contextFactory.CreateDbContext(null);
             var existing = await dbContext.Trips.FirstOrDefaultAsync(t => t.Id == tripId);
             if (existing == null) return ResultDto<TripDto>.Failure("Trip not found.");
@@ -78,19 +124,25 @@ namespace TripService
             return ResultDto<TripDto>.Success(existing.MapToDto(), "Trip updated successfully.");
         }
 
-        public async Task<ResultDto<bool>> DeleteTripAsync(Guid tripId)
+        public async Task<ResultDto<bool>> DeleteTripAsync(Guid tripId, Guid userId)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
             var trip = await dbContext.Trips.FirstOrDefaultAsync(t => t.Id == tripId);
             if (trip == null) return ResultDto<bool>.Failure("Trip not found.");
+            if (trip.UserId != userId) return ResultDto<bool>.Failure("Only the owner can delete this trip.");
 
             dbContext.Trips.Remove(trip);
             await dbContext.SaveChangesAsync();
             return ResultDto<bool>.Success(true, "Trip deleted successfully.");
         }
 
-        public async Task<ResultDto<DestinationDto>> AddDestinationAsync(CreateDestinationDto d)
+        public async Task<ResultDto<DestinationDto>> AddDestinationAsync(CreateDestinationDto d, Guid userId)
         {
+            if (!await HasAccessAsync(d.TripId, userId, true))
+            {
+                return ResultDto<DestinationDto>.Failure("No permission to modify destinations on this trip.");
+            }
+
             using var dbContext = _contextFactory.CreateDbContext(null);
             var dest = new Destination
             {
@@ -107,16 +159,26 @@ namespace TripService
             return ResultDto<DestinationDto>.Success(dest.MapToDto(), "Destination added successfully.");
         }
 
-        public async Task<ResultDto<List<DestinationDto>>> GetTripDestinationsAsync(Guid tripId)
+        public async Task<ResultDto<List<DestinationDto>>> GetTripDestinationsAsync(Guid tripId, Guid userId)
         {
+            if (!await HasAccessAsync(tripId, userId, false))
+            {
+                return ResultDto<List<DestinationDto>>.Failure("Access denied.");
+            }
+
             using var dbContext = _contextFactory.CreateDbContext(null);
             var destinations = await dbContext.Destinations.Where(d => d.TripId == tripId).ToListAsync();
             var dtos = destinations.Select(d => d.MapToDto()).ToList();
             return ResultDto<List<DestinationDto>>.Success(dtos, "Destinations retrieved successfully.");
         }
 
-        public async Task<ResultDto<DestinationDto>> UpdateDestinationAsync(Guid id, CreateDestinationDto d)
+        public async Task<ResultDto<DestinationDto>> UpdateDestinationAsync(Guid id, CreateDestinationDto d, Guid userId)
         {
+            if (!await HasAccessAsync(d.TripId, userId, true))
+            {
+                return ResultDto<DestinationDto>.Failure("No permission to modify destinations on this trip.");
+            }
+
             using var dbContext = _contextFactory.CreateDbContext(null);
             var existing = await dbContext.Destinations.FirstOrDefaultAsync(x => x.Id == id);
             if (existing == null) return ResultDto<DestinationDto>.Failure("Destination not found.");
@@ -131,20 +193,20 @@ namespace TripService
             return ResultDto<DestinationDto>.Success(existing.MapToDto(), "Destination updated successfully.");
         }
 
-        public async Task<ResultDto<bool>> DeleteDestinationAsync(Guid id)
+        public async Task<ResultDto<bool>> DeleteDestinationAsync(Guid id, Guid userId)
         {
             using var dbContext = _contextFactory.CreateDbContext(null);
             var existing = await dbContext.Destinations.FirstOrDefaultAsync(x => x.Id == id);
             if (existing == null) return ResultDto<bool>.Failure("Destination not found.");
 
+            if (!await HasAccessAsync(existing.TripId, userId, true))
+            {
+                return ResultDto<bool>.Failure("No permission to modify destinations on this trip.");
+            }
+
             dbContext.Destinations.Remove(existing);
             await dbContext.SaveChangesAsync();
             return ResultDto<bool>.Success(true, "Destination deleted successfully.");
-        }
-
-        protected override IEnumerable<ServiceInstanceListener> CreateServiceInstanceListeners()
-        {
-            return this.CreateServiceRemotingInstanceListeners();
         }
     }
 }

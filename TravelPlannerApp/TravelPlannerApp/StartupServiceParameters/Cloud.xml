@@ -1,6 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <StartupServices xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.microsoft.com/2011/01/fabric">
   <Parameters>
+    <Parameter Name="ShareService_PartitionCount" Value="1" />
+    <Parameter Name="ShareService_MinReplicaSetSize" Value="3" />
+    <Parameter Name="ShareService_TargetReplicaSetSize" Value="3" />
+    <Parameter Name="ExpenseService_InstanceCount" Value="-1" />
     <Parameter Name="ActivityService_InstanceCount" Value="-1" />
     <Parameter Name="TripService_InstanceCount" Value="-1" />
     <Parameter Name="UserService_InstanceCount" Value="-1" />
