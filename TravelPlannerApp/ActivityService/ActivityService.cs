@@ -1,20 +1,22 @@
-using Microsoft.ServiceFabric.Services.Communication.Runtime;
-using Microsoft.ServiceFabric.Services.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Client;
-using Microsoft.ServiceFabric.Services.Client;
+using ActivityService.Data;
+using ActivityService.Entities;
+using ActivityService.Mappings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.ServiceFabric.Services.Client;
+using Microsoft.ServiceFabric.Services.Communication.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Client;
+using Microsoft.ServiceFabric.Services.Remoting.Runtime;
+using Microsoft.ServiceFabric.Services.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Fabric;
 using System.Linq;
 using System.Threading.Tasks;
-using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Activity;
+using TravelPlanner.Common.DTOs.Notification;
 using TravelPlanner.Common.DTOs.Shared;
-using ActivityService.Data;
-using ActivityService.Entities;
-using ActivityService.Mappings;
+using TravelPlanner.Common.Enums;
+using TravelPlanner.Common.Interfaces;
 
 namespace ActivityService
 {
@@ -82,6 +84,18 @@ namespace ActivityService
 
             dbContext.Activities.Add(activity);
             await dbContext.SaveChangesAsync();
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.ActivityAdded,
+                    Message = $"Activity '{activity.Name}' has been added to the trip plan.",
+                    TripId = activity.TripId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception) { }
             return ResultDto<ActivityDto>.Success(activity.MapToDto(), "Activity added successfully.");
         }
 
@@ -119,6 +133,18 @@ namespace ActivityService
             existing.Status = a.Status;
 
             await dbContext.SaveChangesAsync();
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.ActivityChanged,
+                    Message = $"Activity '{existing.Name}' details have been updated.",
+                    TripId = existing.TripId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception) { }
             return ResultDto<bool>.Success(true, "Activity updated successfully.");
         }
 
@@ -136,6 +162,18 @@ namespace ActivityService
 
             dbContext.Activities.Remove(existing);
             await dbContext.SaveChangesAsync();
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.ActivityRemoved,
+                    Message = $"Activity '{existing.Name}' has been removed from the plan.",
+                    TripId = existing.TripId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception) { }
             return ResultDto<bool>.Success(true, "Activity removed successfully.");
         }
 

@@ -3,6 +3,8 @@ using Microsoft.ServiceFabric.Data.Collections;
 using Microsoft.ServiceFabric.Services.Communication.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Client;
+using Microsoft.ServiceFabric.Services.Client;
 using System;
 using System.Collections.Generic;
 using System.Fabric;
@@ -33,9 +35,25 @@ namespace NotificationService
             return ResultDto<bool>.Success(true, "Event enqueued successfully.");
         }
 
+        public async Task<ResultDto<List<NotificationEventDto>>> GetUserNotificationsAsync(Guid userId)
+        {
+            var historyDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<Guid, List<NotificationEventDto>>>("userNotifications");
+
+            using (var tx = this.StateManager.CreateTransaction())
+            {
+                var result = await historyDict.TryGetValueAsync(tx, userId);
+                if (result.HasValue)
+                {
+                    return ResultDto<List<NotificationEventDto>>.Success(result.Value, "Notifications retrieved successfully.");
+                }
+                return ResultDto<List<NotificationEventDto>>.Success(new List<NotificationEventDto>(), "No notifications found.");
+            }
+        }
+
         protected override async Task RunAsync(CancellationToken cancellationToken)
         {
             var queue = await this.StateManager.GetOrAddAsync<IReliableQueue<NotificationEventDto>>("notificationQueue");
+            var historyDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<Guid, List<NotificationEventDto>>>("userNotifications");
 
             while (true)
             {
@@ -48,7 +66,39 @@ namespace NotificationService
                     if (result.HasValue)
                     {
                         var evt = result.Value;
-                        ServiceEventSource.Current.ServiceMessage(this.Context, $"[EVENT CONSUMED] Type: {evt.EventType} | Message: {evt.Message}");
+                        var targets = new HashSet<Guid>();
+
+                        try
+                        {
+                            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+                            var ownerResult = await tripService.GetTripOwnerAsync(evt.TripId);
+                            if (ownerResult.IsSuccess)
+                            {
+                                targets.Add(ownerResult.Data);
+                            }
+
+                            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+                            var sharedUsersResult = await shareService.GetSharedUsersAsync(evt.TripId);
+                            if (sharedUsersResult.IsSuccess && sharedUsersResult.Data != null)
+                            {
+                                foreach (var userGuid in sharedUsersResult.Data)
+                                {
+                                    targets.Add(userGuid);
+                                }
+                            }
+                        }
+                        catch (Exception)
+                        {
+                        }
+
+                        foreach (var userId in targets)
+                        {
+                            var userHistory = await historyDict.TryGetValueAsync(tx, userId);
+                            var list = userHistory.HasValue ? new List<NotificationEventDto>(userHistory.Value) : new List<NotificationEventDto>();
+                            list.Add(evt);
+                            await historyDict.SetAsync(tx, userId, list);
+                        }
+
                         await tx.CommitAsync();
                     }
                     else

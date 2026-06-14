@@ -9,7 +9,9 @@ using System.Collections.Generic;
 using System.Fabric;
 using System.Linq;
 using System.Threading.Tasks;
+using TravelPlanner.Common.Enums;
 using TravelPlanner.Common.DTOs.Destination;
+using TravelPlanner.Common.DTOs.Notification;
 using TravelPlanner.Common.DTOs.Shared;
 using TravelPlanner.Common.DTOs.Trip;
 using TravelPlanner.Common.Interfaces;
@@ -59,6 +61,22 @@ namespace TripService
             };
             dbContext.Trips.Add(newTrip);
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.TripAdded,
+                    Message = $"New trip '{newTrip.Title}' has been created.",
+                    TripId = newTrip.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<TripDto>.Success(newTrip.MapToDto(), "Trip created successfully.");
         }
 
@@ -122,6 +140,22 @@ namespace TripService
             existing.GeneralNotes = trip.GeneralNotes;
 
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.TripChanged,
+                    Message = $"Trip '{existing.Title}' core details have been updated.",
+                    TripId = existing.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<TripDto>.Success(existing.MapToDto(), "Trip updated successfully.");
         }
 
@@ -134,6 +168,22 @@ namespace TripService
 
             dbContext.Trips.Remove(trip);
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.TripRemoved,
+                    Message = $"Trip '{trip.Title}' has been deleted.",
+                    TripId = trip.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<bool>.Success(true, "Trip deleted successfully.");
         }
 
@@ -157,6 +207,22 @@ namespace TripService
             };
             dbContext.Destinations.Add(dest);
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.DestinationAdded,
+                    Message = $"Destination '{dest.Name}' has been added to the trip plan.",
+                    TripId = dest.TripId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<DestinationDto>.Success(dest.MapToDto(), "Destination added successfully.");
         }
 
@@ -191,6 +257,22 @@ namespace TripService
             existing.Notes = d.Notes;
 
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.DestinationChanged,
+                    Message = $"Destination '{existing.Name}' details have been updated.",
+                    TripId = existing.TripId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<DestinationDto>.Success(existing.MapToDto(), "Destination updated successfully.");
         }
 
@@ -207,7 +289,30 @@ namespace TripService
 
             dbContext.Destinations.Remove(existing);
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
+                {
+                    EventType = NotificationEventType.DestinationRemoved,
+                    Message = $"Destination '{existing.Name}' has been removed from the plan.",
+                    TripId = existing.TripId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<bool>.Success(true, "Destination deleted successfully.");
+        }
+        public async Task<ResultDto<Guid>> GetTripOwnerAsync(Guid tripId)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var trip = await dbContext.Trips.FirstOrDefaultAsync(t => t.Id == tripId);
+            if (trip == null) return ResultDto<Guid>.Failure("Trip not found.");
+            return ResultDto<Guid>.Success(trip.UserId, "Trip owner retrieved successfully.");
         }
 
         protected override IEnumerable<ServiceInstanceListener> CreateServiceInstanceListeners()

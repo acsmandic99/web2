@@ -1,5 +1,6 @@
 ﻿using Microsoft.ServiceFabric.Services.Remoting;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using TravelPlanner.Common.DTOs.Trip;
 using TravelPlanner.Common.DTOs.Shared;
@@ -12,5 +13,6 @@ namespace TravelPlanner.Common.Interfaces
         Task<ResultDto<TripShareDto>> GenerateShareTokenAsync(Guid tripId, ShareAccessLevel accessLevel, Guid userId);
         Task<ResultDto<bool>> ClaimShareTokenAsync(string token, Guid userId);
         Task<ResultDto<string>> CheckAccessAsync(Guid tripId, Guid userId);
+        Task<ResultDto<List<Guid>>> GetSharedUsersAsync(Guid tripId);
     }
 }

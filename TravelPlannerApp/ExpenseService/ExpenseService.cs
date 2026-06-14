@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using TravelPlanner.Common.DTOs.Expense;
 using TravelPlanner.Common.DTOs.Notification;
 using TravelPlanner.Common.DTOs.Shared;
+using TravelPlanner.Common.Enums;
 using TravelPlanner.Common.Interfaces;
 
 namespace ExpenseService
@@ -70,7 +71,7 @@ namespace ExpenseService
                 var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new Microsoft.ServiceFabric.Services.Client.ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
-                    EventType = "ExpenseAdded",
+                    EventType = NotificationEventType.ExpenseAdded,
                     Message = $"New expense recorded: {newExpense.Title} ({newExpense.Amount} EUR) for Trip {newExpense.TripId}",
                     CreatedAt = DateTime.UtcNow
                 });
