@@ -113,7 +113,33 @@ namespace ChecklistService
                 return ResultDto<bool>.Success(true, "Checklist item deleted successfully.");
             }
         }
+        public async Task<ResultDto<bool>> ClearAllChecklistsForTripAsync(Guid tripId)
+        {
+            var checklistDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, List<ChecklistItemDto>>>("checklists");
 
+            using (var tx = this.StateManager.CreateTransaction())
+            {
+                var enumerable = await checklistDict.CreateEnumerableAsync(tx);
+                using (var enumerator = enumerable.GetAsyncEnumerator())
+                {
+                    var keysToDelete = new List<string>();
+                    while (await enumerator.MoveNextAsync(CancellationToken.None))
+                    {
+                        if (enumerator.Current.Key.StartsWith($"{tripId}_"))
+                        {
+                            keysToDelete.Add(enumerator.Current.Key);
+                        }
+                    }
+                    foreach (var key in keysToDelete)
+                    {
+                        await checklistDict.TryRemoveAsync(tx, key);
+                    }
+                }
+                await tx.CommitAsync();
+            }
+
+            return ResultDto<bool>.Success(true, "All trip checklists cleared successfully.");
+        }
         protected override IEnumerable<ServiceReplicaListener> CreateServiceReplicaListeners()
         {
             return this.CreateServiceRemotingReplicaListeners();

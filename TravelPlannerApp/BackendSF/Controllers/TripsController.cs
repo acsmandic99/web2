@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Client;
 using System;
@@ -16,13 +17,21 @@ namespace BackendSF.Controllers
     [Route("api/trips")]
     public class TripsController : ControllerBase
     {
+        private readonly IConfiguration _configuration;
+
+        public TripsController(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
         [HttpGet("user/{userId}")]
         public async Task<IActionResult> GetUserTrips(Guid userId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || Guid.Parse(userIdClaim) != userId) return Unauthorized();
 
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             return Ok(await tripService.GetUserTripsAsync(userId));
         }
 
@@ -32,7 +41,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.GetTripByIdAsync(id, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -43,7 +53,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.CreateTripAsync(request, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -54,7 +65,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.UpdateTripAsync(id, request, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -65,7 +77,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.DeleteTripAsync(id, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -76,7 +89,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+            var uri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+            var shareService = ServiceProxy.Create<IShareService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await shareService.GenerateShareTokenAsync(id, accessLevel, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -87,7 +101,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+            var uri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+            var shareService = ServiceProxy.Create<IShareService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await shareService.ClaimShareTokenAsync(token, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }

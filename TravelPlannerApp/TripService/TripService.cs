@@ -4,7 +4,9 @@ using Microsoft.ServiceFabric.Services.Communication.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
+using Microsoft.Extensions.Configuration;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Fabric;
 using System.Linq;
@@ -24,10 +26,15 @@ namespace TripService
     internal sealed class TripService : StatelessService, ITripService
     {
         private readonly TripDbContextFactory _contextFactory;
+        private readonly IConfiguration _configuration;
 
         public TripService(StatelessServiceContext context) : base(context)
         {
             _contextFactory = new TripDbContextFactory();
+            _configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
         }
 
         private async Task<bool> HasAccessAsync(Guid tripId, Guid userId, bool requiresEdit)
@@ -37,7 +44,8 @@ namespace TripService
             if (trip == null) return false;
             if (trip.UserId == userId) return true;
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+            var shareServiceUri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+            var shareService = ServiceProxy.Create<IShareService>(new Uri(shareServiceUri), new ServicePartitionKey(0L));
             var access = await shareService.CheckAccessAsync(tripId, userId);
 
             if (!access.IsSuccess) return false;
@@ -47,6 +55,15 @@ namespace TripService
 
         public async Task<ResultDto<TripDto>> CreateTripAsync(CreateTripDto trip, Guid userId)
         {
+            if (trip.EstimatedBudget < 0)
+            {
+                return ResultDto<TripDto>.Failure("Budget cannot be a negative value.");
+            }
+            if (trip.StartDate.Date > trip.EndDate.Date)
+            {
+                return ResultDto<TripDto>.Failure("End date cannot be scheduled before the start date.");
+            }
+
             using var dbContext = _contextFactory.CreateDbContext(null);
             var newTrip = new Trip
             {
@@ -64,7 +81,8 @@ namespace TripService
 
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.TripAdded,
@@ -88,7 +106,8 @@ namespace TripService
 
             try
             {
-                var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+                var shareServiceUri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+                var shareService = ServiceProxy.Create<IShareService>(new Uri(shareServiceUri), new ServicePartitionKey(0L));
                 var allTrips = await dbContext.Trips.ToListAsync();
 
                 foreach (var trip in allTrips)
@@ -110,7 +129,7 @@ namespace TripService
 
         public async Task<ResultDto<TripDto>> GetTripByIdAsync(Guid tripId, Guid userId)
         {
-            if (!await HasAccessAsync(tripId, userId, false))
+            if (userId != Guid.Empty && !await HasAccessAsync(tripId, userId, false))
             {
                 return ResultDto<TripDto>.Failure("Access denied to this trip.");
             }
@@ -121,8 +140,24 @@ namespace TripService
             return ResultDto<TripDto>.Success(t.MapToDto(), "Trip retrieved successfully.");
         }
 
+        public async Task<ResultDto<Guid>> GetTripOwnerAsync(Guid tripId)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var trip = await dbContext.Trips.FirstOrDefaultAsync(t => t.Id == tripId);
+            if (trip == null) return ResultDto<Guid>.Failure("Trip not found.");
+            return ResultDto<Guid>.Success(trip.UserId, "Trip owner retrieved successfully.");
+        }
+
         public async Task<ResultDto<TripDto>> UpdateTripAsync(Guid tripId, CreateTripDto trip, Guid userId)
         {
+            if (trip.EstimatedBudget < 0)
+            {
+                return ResultDto<TripDto>.Failure("Budget cannot be a negative value.");
+            }
+            if (trip.StartDate.Date > trip.EndDate.Date)
+            {
+                return ResultDto<TripDto>.Failure("End date cannot be scheduled before the start date.");
+            }
             if (!await HasAccessAsync(tripId, userId, true))
             {
                 return ResultDto<TripDto>.Failure("You do not have permission to modify this trip.");
@@ -143,7 +178,8 @@ namespace TripService
 
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.TripChanged,
@@ -166,12 +202,35 @@ namespace TripService
             if (trip == null) return ResultDto<bool>.Failure("Trip not found.");
             if (trip.UserId != userId) return ResultDto<bool>.Failure("Only the owner can delete this trip.");
 
+            try
+            {
+                var activityServiceUri = _configuration["ServiceFabricSettings:ActivityServiceUri"];
+                var activityService = ServiceProxy.Create<IActivityService>(new Uri(activityServiceUri));
+                await activityService.RemoveAllActivitiesForTripAsync(tripId);
+
+                var expenseServiceUri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+                var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(expenseServiceUri));
+                await expenseService.RemoveAllExpensesForTripAsync(tripId);
+
+                var shareServiceUri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+                var shareService = ServiceProxy.Create<IShareService>(new Uri(shareServiceUri), new ServicePartitionKey(0L));
+                await shareService.ClearAllSharesForTripAsync(tripId);
+
+                var checklistServiceUri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
+                var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(checklistServiceUri), new ServicePartitionKey(0L));
+                await checklistService.ClearAllChecklistsForTripAsync(tripId);
+            }
+            catch (Exception)
+            {
+            }
+
             dbContext.Trips.Remove(trip);
             await dbContext.SaveChangesAsync();
 
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.TripRemoved,
@@ -210,7 +269,8 @@ namespace TripService
 
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.DestinationAdded,
@@ -260,7 +320,8 @@ namespace TripService
 
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.DestinationChanged,
@@ -292,7 +353,8 @@ namespace TripService
 
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.DestinationRemoved,
@@ -306,13 +368,6 @@ namespace TripService
             }
 
             return ResultDto<bool>.Success(true, "Destination deleted successfully.");
-        }
-        public async Task<ResultDto<Guid>> GetTripOwnerAsync(Guid tripId)
-        {
-            using var dbContext = _contextFactory.CreateDbContext(null);
-            var trip = await dbContext.Trips.FirstOrDefaultAsync(t => t.Id == tripId);
-            if (trip == null) return ResultDto<Guid>.Failure("Trip not found.");
-            return ResultDto<Guid>.Success(trip.UserId, "Trip owner retrieved successfully.");
         }
 
         protected override IEnumerable<ServiceInstanceListener> CreateServiceInstanceListeners()

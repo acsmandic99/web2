@@ -1,42 +1,51 @@
-using ExpenseService.Data;
-using ExpenseService.Entities;
-using ExpenseService.Mappings;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.ServiceFabric.Services.Client;
 using Microsoft.ServiceFabric.Services.Communication.Runtime;
-using Microsoft.ServiceFabric.Services.Remoting.Client;
-using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Runtime;
+using Microsoft.ServiceFabric.Services.Remoting.Client;
+using Microsoft.ServiceFabric.Services.Client;
+using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Fabric;
 using System.Linq;
 using System.Threading.Tasks;
+using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Expense;
 using TravelPlanner.Common.DTOs.Notification;
 using TravelPlanner.Common.DTOs.Shared;
 using TravelPlanner.Common.Enums;
-using TravelPlanner.Common.Interfaces;
+using ExpenseService.Data;
+using ExpenseService.Entities;
+using ExpenseService.Mappings;
 
 namespace ExpenseService
 {
     internal sealed class ExpenseService : StatelessService, IExpenseService
     {
         private readonly ExpenseDbContextFactory _contextFactory;
+        private readonly IConfiguration _configuration;
 
         public ExpenseService(StatelessServiceContext context) : base(context)
         {
             _contextFactory = new ExpenseDbContextFactory();
+            _configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
         }
 
         private async Task<bool> CheckAccessAsync(Guid tripId, Guid userId, bool requiresEdit)
         {
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
             var tripResult = await tripService.GetTripByIdAsync(tripId, userId);
             if (!tripResult.IsSuccess || tripResult.Data == null) return false;
             if (tripResult.Data.UserId == userId) return true;
 
-            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+            var shareServiceUri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+            var shareService = ServiceProxy.Create<IShareService>(new Uri(shareServiceUri), new ServicePartitionKey(0L));
             var access = await shareService.CheckAccessAsync(tripId, userId);
             if (!access.IsSuccess) return false;
 
@@ -68,11 +77,13 @@ namespace ExpenseService
 
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new Microsoft.ServiceFabric.Services.Client.ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.ExpenseAdded,
                     Message = $"New expense recorded: {newExpense.Title} ({newExpense.Amount} EUR) for Trip {newExpense.TripId}",
+                    TripId = newExpense.TripId,
                     CreatedAt = DateTime.UtcNow
                 });
             }
@@ -104,7 +115,8 @@ namespace ExpenseService
             }
 
             using var dbContext = _contextFactory.CreateDbContext(null);
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
             var tripResult = await tripService.GetTripByIdAsync(tripId, userId);
 
             var totalSpent = await dbContext.Expenses.Where(e => e.TripId == tripId).SumAsync(e => e.Amount);
@@ -169,6 +181,20 @@ namespace ExpenseService
             dbContext.Expenses.Remove(existing);
             await dbContext.SaveChangesAsync();
             return ResultDto<bool>.Success(true, "Expense deleted successfully.");
+        }
+
+        public async Task<ResultDto<bool>> RemoveAllExpensesForTripAsync(Guid tripId)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var expenses = await dbContext.Expenses.Where(e => e.TripId == tripId).ToListAsync();
+
+            if (expenses.Any())
+            {
+                dbContext.Expenses.RemoveRange(expenses);
+                await dbContext.SaveChangesAsync();
+            }
+
+            return ResultDto<bool>.Success(true, "All trip expenses removed successfully.");
         }
 
         protected override IEnumerable<ServiceInstanceListener> CreateServiceInstanceListeners()

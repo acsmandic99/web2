@@ -13,5 +13,6 @@ namespace TravelPlanner.Common.Interfaces
         Task<ResultDto<List<ChecklistItemDto>>> GetItemsAsync(Guid tripId, Guid userId);
         Task<ResultDto<bool>> ToggleItemAsync(Guid tripId, Guid itemId, Guid userId);
         Task<ResultDto<bool>> DeleteItemAsync(Guid tripId, Guid itemId, Guid userId);
+        Task<ResultDto<bool>> ClearAllChecklistsForTripAsync(Guid tripId);
     }
 }

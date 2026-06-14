@@ -1,37 +1,41 @@
-using ActivityService.Data;
-using ActivityService.Entities;
-using ActivityService.Mappings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.ServiceFabric.Services.Client;
 using Microsoft.ServiceFabric.Services.Communication.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
-using System;
-using System.Collections.Generic;
 using System.Fabric;
-using System.Linq;
-using System.Threading.Tasks;
+using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Activity;
 using TravelPlanner.Common.DTOs.Notification;
 using TravelPlanner.Common.DTOs.Shared;
 using TravelPlanner.Common.Enums;
-using TravelPlanner.Common.Interfaces;
+using ActivityService.Data;
+using ActivityService.Entities;
+using ActivityService.Mappings;
 
 namespace ActivityService
 {
     internal sealed class ActivityService : StatelessService, IActivityService
     {
         private readonly ActivityDbContextFactory _contextFactory;
+        private readonly IConfiguration _configuration;
 
         public ActivityService(StatelessServiceContext context) : base(context)
         {
             _contextFactory = new ActivityDbContextFactory();
+
+            _configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
         }
 
         private async Task<string> ValidateActivityAccessAndDatesAsync(Guid tripId, DateTime scheduledAt, Guid userId, bool requiresEdit)
         {
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
             var tripResult = await tripService.GetTripByIdAsync(tripId, userId);
 
             if (!tripResult.IsSuccess || tripResult.Data == null)
@@ -43,7 +47,8 @@ namespace ActivityService
             {
                 if (tripResult.Data.UserId != userId)
                 {
-                    var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+                    var shareServiceUri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+                    var shareService = ServiceProxy.Create<IShareService>(new Uri(shareServiceUri), new ServicePartitionKey(0L));
                     var access = await shareService.CheckAccessAsync(tripId, userId);
                     if (!access.IsSuccess || access.Data != "Edit")
                     {
@@ -84,9 +89,11 @@ namespace ActivityService
 
             dbContext.Activities.Add(activity);
             await dbContext.SaveChangesAsync();
+
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.ActivityAdded,
@@ -95,7 +102,10 @@ namespace ActivityService
                     CreatedAt = DateTime.UtcNow
                 });
             }
-            catch (Exception) { }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<ActivityDto>.Success(activity.MapToDto(), "Activity added successfully.");
         }
 
@@ -133,9 +143,11 @@ namespace ActivityService
             existing.Status = a.Status;
 
             await dbContext.SaveChangesAsync();
+
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.ActivityChanged,
@@ -144,7 +156,10 @@ namespace ActivityService
                     CreatedAt = DateTime.UtcNow
                 });
             }
-            catch (Exception) { }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<bool>.Success(true, "Activity updated successfully.");
         }
 
@@ -162,9 +177,11 @@ namespace ActivityService
 
             dbContext.Activities.Remove(existing);
             await dbContext.SaveChangesAsync();
+
             try
             {
-                var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.ActivityRemoved,
@@ -173,8 +190,25 @@ namespace ActivityService
                     CreatedAt = DateTime.UtcNow
                 });
             }
-            catch (Exception) { }
+            catch (Exception)
+            {
+            }
+
             return ResultDto<bool>.Success(true, "Activity removed successfully.");
+        }
+
+        public async Task<ResultDto<bool>> RemoveAllActivitiesForTripAsync(Guid tripId)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var activities = await dbContext.Activities.Where(a => a.TripId == tripId).ToListAsync();
+
+            if (activities.Any())
+            {
+                dbContext.Activities.RemoveRange(activities);
+                await dbContext.SaveChangesAsync();
+            }
+
+            return ResultDto<bool>.Success(true, "All trip activities removed successfully.");
         }
 
         protected override IEnumerable<ServiceInstanceListener> CreateServiceInstanceListeners()

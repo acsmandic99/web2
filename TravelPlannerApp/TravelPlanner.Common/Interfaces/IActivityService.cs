@@ -13,5 +13,6 @@ namespace TravelPlanner.Common.Interfaces
         Task<ResultDto<List<ActivityDto>>> GetTripActivitiesAsync(Guid tripId, Guid userId);
         Task<ResultDto<bool>> UpdateActivityAsync(Guid activityId, CreateActivityDto activity, Guid userId);
         Task<ResultDto<bool>> RemoveActivityAsync(Guid activityId, Guid userId);
+        Task<ResultDto<bool>> RemoveAllActivitiesForTripAsync(Guid tripId);
     }
 }

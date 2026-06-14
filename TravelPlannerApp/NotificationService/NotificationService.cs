@@ -5,7 +5,9 @@ using Microsoft.ServiceFabric.Services.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Client;
+using Microsoft.Extensions.Configuration;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Fabric;
 using System.Threading;
@@ -18,9 +20,16 @@ namespace NotificationService
 {
     internal sealed class NotificationService : StatefulService, INotificationService
     {
+        private readonly IConfiguration _configuration;
+
         public NotificationService(StatefulServiceContext context)
             : base(context)
-        { }
+        {
+            _configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+        }
 
         public async Task<ResultDto<bool>> PublishEventAsync(NotificationEventDto notificationEvent)
         {
@@ -70,14 +79,16 @@ namespace NotificationService
 
                         try
                         {
-                            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+                            var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+                            var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
                             var ownerResult = await tripService.GetTripOwnerAsync(evt.TripId);
                             if (ownerResult.IsSuccess)
                             {
                                 targets.Add(ownerResult.Data);
                             }
 
-                            var shareService = ServiceProxy.Create<IShareService>(new Uri("fabric:/TravelPlannerApp/ShareService"), new ServicePartitionKey(0L));
+                            var shareServiceUri = _configuration["ServiceFabricSettings:ShareServiceUri"];
+                            var shareService = ServiceProxy.Create<IShareService>(new Uri(shareServiceUri), new ServicePartitionKey(0L));
                             var sharedUsersResult = await shareService.GetSharedUsersAsync(evt.TripId);
                             if (sharedUsersResult.IsSuccess && sharedUsersResult.Data != null)
                             {

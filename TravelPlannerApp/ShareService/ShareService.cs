@@ -5,9 +5,12 @@ using Microsoft.ServiceFabric.Services.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Client;
+using Microsoft.Extensions.Configuration;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Fabric;
+using System.Threading;
 using System.Threading.Tasks;
 using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Trip;
@@ -19,13 +22,20 @@ namespace ShareService
 {
     internal sealed class ShareService : StatefulService, IShareService
     {
-        public ShareService(StatefulServiceContext context)
-            : base(context)
-        { }
+        private readonly IConfiguration _configuration;
+
+        public ShareService(StatefulServiceContext context) : base(context)
+        {
+            _configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+        }
 
         public async Task<ResultDto<TripShareDto>> GenerateShareTokenAsync(Guid tripId, ShareAccessLevel accessLevel, Guid userId)
         {
-            var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+            var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
             var tripResult = await tripService.GetTripByIdAsync(tripId, userId);
 
             if (!tripResult.IsSuccess || tripResult.Data == null)
@@ -78,7 +88,8 @@ namespace ShareService
                     return ResultDto<bool>.Failure("Token already claimed.");
                 }
 
-                var tripService = ServiceProxy.Create<ITripService>(new Uri("fabric:/TravelPlannerApp/TripService"));
+                var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+                var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
                 var tripResult = await tripService.GetTripByIdAsync(share.TripId, userId);
                 if (tripResult.IsSuccess && tripResult.Data != null && tripResult.Data.UserId == userId)
                 {
@@ -100,7 +111,8 @@ namespace ShareService
             {
                 try
                 {
-                    var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+                    var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                    var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
                     await notificationService.PublishEventAsync(new NotificationEventDto
                     {
                         EventType = NotificationEventType.TripShareAccepted,
@@ -145,7 +157,7 @@ namespace ShareService
                 var enumerable = await permsDict.CreateEnumerableAsync(tx);
                 using (var enumerator = enumerable.GetAsyncEnumerator())
                 {
-                    while (await enumerator.MoveNextAsync(System.Threading.CancellationToken.None))
+                    while (await enumerator.MoveNextAsync(CancellationToken.None))
                     {
                         var current = enumerator.Current;
                         if (current.Key.StartsWith($"{tripId}_"))
@@ -161,6 +173,53 @@ namespace ShareService
             }
 
             return ResultDto<List<Guid>>.Success(sharedUsers, "Shared users retrieved successfully.");
+        }
+
+        public async Task<ResultDto<bool>> ClearAllSharesForTripAsync(Guid tripId)
+        {
+            var tokensDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, TripShareDto>>("tokens");
+            var permsDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, string>>("permissions");
+
+            using (var tx = this.StateManager.CreateTransaction())
+            {
+                var tokensEnum = await tokensDict.CreateEnumerableAsync(tx);
+                using (var tokensEnumerator = tokensEnum.GetAsyncEnumerator())
+                {
+                    var tokensToDelete = new List<string>();
+                    while (await tokensEnumerator.MoveNextAsync(CancellationToken.None))
+                    {
+                        if (tokensEnumerator.Current.Value.TripId == tripId)
+                        {
+                            tokensToDelete.Add(tokensEnumerator.Current.Key);
+                        }
+                    }
+                    foreach (var tokenKey in tokensToDelete)
+                    {
+                        await tokensDict.TryRemoveAsync(tx, tokenKey);
+                    }
+                }
+
+                var permsEnum = await permsDict.CreateEnumerableAsync(tx);
+                using (var permsEnumerator = permsEnum.GetAsyncEnumerator())
+                {
+                    var permsToDelete = new List<string>();
+                    while (await permsEnumerator.MoveNextAsync(CancellationToken.None))
+                    {
+                        if (permsEnumerator.Current.Key.StartsWith($"{tripId}_"))
+                        {
+                            permsToDelete.Add(permsEnumerator.Current.Key);
+                        }
+                    }
+                    foreach (var permKey in permsToDelete)
+                    {
+                        await permsDict.TryRemoveAsync(tx, permKey);
+                    }
+                }
+
+                await tx.CommitAsync();
+            }
+
+            return ResultDto<bool>.Success(true, "All trip share records cleared successfully.");
         }
 
         protected override IEnumerable<ServiceReplicaListener> CreateServiceReplicaListeners()

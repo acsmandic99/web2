@@ -14,5 +14,6 @@ namespace TravelPlanner.Common.Interfaces
         Task<ResultDto<bool>> ClaimShareTokenAsync(string token, Guid userId);
         Task<ResultDto<string>> CheckAccessAsync(Guid tripId, Guid userId);
         Task<ResultDto<List<Guid>>> GetSharedUsersAsync(Guid tripId);
+        Task<ResultDto<bool>> ClearAllSharesForTripAsync(Guid tripId);
     }
 }

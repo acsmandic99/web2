@@ -15,5 +15,6 @@ namespace TravelPlanner.Common.Interfaces
         Task<ResultDto<ExpenseDto>> GetExpenseByIdAsync(Guid expenseId, Guid userId);
         Task<ResultDto<ExpenseDto>> UpdateExpenseAsync(Guid expenseId, CreateExpenseDto expense, Guid userId);
         Task<ResultDto<bool>> DeleteExpenseAsync(Guid expenseId, Guid userId);
+        Task<ResultDto<bool>> RemoveAllExpensesForTripAsync(Guid tripId);
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Client;
 using System;
@@ -15,13 +16,21 @@ namespace BackendSF.Controllers
     [Route("api/checklists")]
     public class ChecklistsController : ControllerBase
     {
+        private readonly IConfiguration _configuration;
+
+        public ChecklistsController(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
         [HttpPost]
         public async Task<IActionResult> AddItem([FromBody] CreateChecklistItemDto request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri("fabric:/TravelPlannerApp/ChecklistService"), new ServicePartitionKey(0L));
+            var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
+            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.AddItemAsync(request, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -32,7 +41,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri("fabric:/TravelPlannerApp/ChecklistService"), new ServicePartitionKey(0L));
+            var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
+            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.GetItemsAsync(tripId, Guid.Parse(userIdClaim));
             return Ok(result);
         }
@@ -43,7 +53,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri("fabric:/TravelPlannerApp/ChecklistService"), new ServicePartitionKey(0L));
+            var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
+            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.ToggleItemAsync(tripId, itemId, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
@@ -54,7 +65,8 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri("fabric:/TravelPlannerApp/ChecklistService"), new ServicePartitionKey(0L));
+            var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
+            var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.DeleteItemAsync(tripId, itemId, Guid.Parse(userIdClaim));
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }

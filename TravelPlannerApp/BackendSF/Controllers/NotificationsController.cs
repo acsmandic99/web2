@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Client;
 using System;
@@ -14,15 +15,22 @@ namespace BackendSF.Controllers
     [Route("api/notifications")]
     public class NotificationsController : ControllerBase
     {
+        private readonly IConfiguration _configuration;
+
+        public NotificationsController(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetMyNotifications()
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var notificationService = ServiceProxy.Create<INotificationService>(new Uri("fabric:/TravelPlannerApp/NotificationService"), new ServicePartitionKey(0L));
+            var uri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+            var notificationService = ServiceProxy.Create<INotificationService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await notificationService.GetUserNotificationsAsync(Guid.Parse(userIdClaim));
-
             return Ok(result);
         }
     }
