@@ -40,6 +40,7 @@
     <ProjectReference Include="..\BackendSF\BackendSF.csproj">
       <ServiceLaunchUrl>http://localhost:{ServicePort}/swagger</ServiceLaunchUrl>
     </ProjectReference>
+    <ProjectReference Include="..\ChecklistService\ChecklistService.csproj" />
     <ProjectReference Include="..\ExpenseService\ExpenseService.csproj" />
     <ProjectReference Include="..\NotificationService\NotificationService.csproj" />
     <ProjectReference Include="..\ShareService\ShareService.csproj" />
