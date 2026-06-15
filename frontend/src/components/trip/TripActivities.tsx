@@ -34,7 +34,7 @@ export const TripActivities: React.FC<TripActivitiesProps> = ({ tripId, isBudget
         setActivities(sorted);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to load activities.');
+      setError(err.message || 'Failed to load activities.');
     }
   };
 
@@ -54,36 +54,27 @@ export const TripActivities: React.FC<TripActivitiesProps> = ({ tripId, isBudget
     try {
       setError(null);
       if (editingId) {
-        await apiClient.put<ResultDto<boolean>>(`/api/activities/${editingId}`, { ...formData, tripId });
+        const res = await apiClient.put<ResultDto<boolean>>(`/api/activities/${editingId}`, { ...formData, tripId });
+        if (!res.data.isSuccess) throw new Error(res.data.message);
         setEditingId(null);
       } else {
-        await apiClient.post<ResultDto<ActivityDto>>('/api/activities', { ...formData, tripId });
+        const res = await apiClient.post<ResultDto<ActivityDto>>('/api/activities', { ...formData, tripId });
+        if (!res.data.isSuccess) throw new Error(res.data.message);
       }
+      
       setFormData({ name: '', location: '', scheduledAt: '', price: 0, description: '', status: 0 });
       await fetchActivities();
       await onBudgetChange();
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to save activity.');
+      setError(err.message || 'Failed to save activity.');
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name.trim()) {
-      setError('Activity name is required.');
-      return;
-    }
-    if (!formData.location.trim()) {
-      setError('Location is required.');
-      return;
-    }
-    if (!formData.scheduledAt) {
-      setError('Scheduled date and time are required.');
-      return;
-    }
-    if (formData.price < 0) {
-      setError('Price cannot be a negative value.');
+    if (!formData.name.trim() || !formData.location.trim() || !formData.scheduledAt) {
+      setError('All fields are required.');
       return;
     }
 
@@ -97,15 +88,10 @@ export const TripActivities: React.FC<TripActivitiesProps> = ({ tripId, isBudget
   const handleEditClick = (act: ActivityDto) => {
     setEditingId(act.id);
     const d = new Date(act.scheduledAt);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
     setFormData({
       name: act.name,
       location: act.location,
-      scheduledAt: `${year}-${month}-${day}T${hours}:${minutes}`,
+      scheduledAt: d.toISOString().slice(0, 16),
       price: act.price,
       description: act.description || '',
       status: act.status
@@ -119,121 +105,66 @@ export const TripActivities: React.FC<TripActivitiesProps> = ({ tripId, isBudget
 
   const handleDelete = async (id: string) => {
     try {
-      await apiClient.delete<ResultDto<boolean>>(`/api/activities/${id}`);
-      await fetchActivities();
-      await onBudgetChange();
+      const res = await apiClient.delete<ResultDto<boolean>>(`/api/activities/${id}`);
+      if (res.data.isSuccess) {
+        await fetchActivities();
+        await onBudgetChange();
+      } else {
+        setError(res.data.message);
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to delete activity.');
+      setError(err.message || 'Failed to delete activity.');
     }
   };
 
-  const getStatusLabel = (status: number) => {
-    switch (status) {
-      case 0: return { label: 'Planned', css: 'bg-gray-100 text-gray-800' };
-      case 1: return { label: 'Reserved', css: 'bg-blue-100 text-blue-800' };
-      case 2: return { label: 'Completed', css: 'bg-green-100 text-green-800' };
-      case 3: return { label: 'Canceled', css: 'bg-red-100 text-red-800' };
-      default: return { label: 'Unknown', css: 'bg-gray-100 text-gray-800' };
-    }
-  };
+
 
   const formatDateFormatted = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${day}.${month}.${year}. ${hours}:${minutes}`;
+    return new Date(dateStr).toLocaleString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-1 bg-white p-6 rounded-lg border border-gray-200 shadow-sm h-fit">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">
-          {editingId ? 'Edit Activity' : 'Add Activity'}
-        </h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">{editingId ? 'Edit Activity' : 'Add Activity'}</h3>
         {error && <div className="mb-4 text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Activity Name</label>
-            <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Location</label>
-            <input type="text" name="location" value={formData.location} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Scheduled Date & Time</label>
-            <input type="datetime-local" name="scheduledAt" value={formData.scheduledAt} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Price (EUR)</label>
-              <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-              <select name="status" value={formData.status} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value={0}>Planned</option>
-                <option value={1}>Reserved</option>
-                <option value={2}>Completed</option>
-                <option value={3}>Canceled</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
-            <textarea name="description" value={formData.description} onChange={handleChange} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
+          <input type="text" name="name" placeholder="Name" value={formData.name} onChange={handleChange} className="w-full px-3 py-2 border rounded-md text-sm" />
+          <input type="text" name="location" placeholder="Location" value={formData.location} onChange={handleChange} className="w-full px-3 py-2 border rounded-md text-sm" />
+          <input type="datetime-local" name="scheduledAt" value={formData.scheduledAt} onChange={handleChange} className="w-full px-3 py-2 border rounded-md text-sm" />
+          <input type="number" name="price" placeholder="Price" value={formData.price} onChange={handleChange} className="w-full px-3 py-2 border rounded-md text-sm" />
+          <select name="status" value={formData.status} onChange={handleChange} className="w-full px-3 py-2 border rounded-md text-sm bg-white">
+            <option value={0}>Planned</option>
+            <option value={1}>Reserved</option>
+            <option value={2}>Completed</option>
+            <option value={3}>Canceled</option>
+          </select>
+          <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="w-full px-3 py-2 border rounded-md text-sm" />
           <div className="flex space-x-2">
-            {editingId && (
-              <button type="button" onClick={handleCancelEdit} className="w-1/2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-md text-sm transition-colors border cursor-pointer">
-                Cancel
-              </button>
-            )}
-            <button type="submit" className={`py-2 text-white font-medium rounded-md text-sm transition-colors shadow-sm cursor-pointer ${editingId ? 'w-1/2 bg-green-600 hover:bg-green-700' : 'w-full bg-blue-600 hover:bg-blue-700'}`}>
-              {editingId ? 'Update' : 'Save Activity'}
+            {editingId && <button type="button" onClick={handleCancelEdit} className="w-1/2 py-2 border rounded-md text-sm">Cancel</button>}
+            <button type="submit" className={`py-2 text-white font-medium rounded-md text-sm ${editingId ? 'w-1/2 bg-green-600' : 'w-full bg-blue-600'}`}>
+              {editingId ? 'Update' : 'Save'}
             </button>
           </div>
         </form>
       </div>
 
       <div className="lg:col-span-2 space-y-4">
-        {activities.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg border border-gray-200 text-center text-sm text-gray-500 shadow-sm">No scheduled activities yet.</div>
-        ) : (
-          activities.map((act) => {
-            const status = getStatusLabel(act.status);
-            return (
-              <div key={act.id} className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex justify-between items-start">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <h4 className="text-md font-bold text-gray-900">{act.name}</h4>
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status.css}`}>{status.label}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 font-medium">{act.location} &bull; {formatDateFormatted(act.scheduledAt)}</p>
-                  <p className="text-xs font-semibold text-blue-600 mt-1">Cost: {act.price} EUR</p>
-                  {act.description && <p className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded border border-gray-100">{act.description}</p>}
-                </div>
-                <div className="flex space-x-3 ml-4">
-                  <button onClick={() => handleEditClick(act)} className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors cursor-pointer">Edit</button>
-                  <button onClick={() => handleDelete(act.id)} className="text-xs font-medium text-red-600 hover:text-red-800 transition-colors cursor-pointer">Remove</button>
-                </div>
-              </div>
-            );
-          })
-        )}
+        {activities.map((act) => (
+          <div key={act.id} className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex justify-between items-start">
+            <div>
+              <h4 className="font-bold">{act.name}</h4>
+              <p className="text-xs text-gray-500">{act.location} • {formatDateFormatted(act.scheduledAt)}</p>
+              <p className="text-xs font-semibold text-blue-600">Cost: {act.price} EUR</p>
+            </div>
+            <div className="flex space-x-2">
+              <button onClick={() => handleEditClick(act)} className="text-blue-600 text-xs font-bold">Edit</button>
+              <button onClick={() => handleDelete(act.id)} className="text-red-600 text-xs font-bold">Remove</button>
+            </div>
+          </div>
+        ))}
       </div>
-
-      <BudgetWarningModal
-        isOpen={showWarningModal}
-        onClose={() => setShowBudgetWarningModal(false)}
-        onConfirm={() => {
-          setShowBudgetWarningModal(false);
-          executeSaveActivity();
-        }}
-      />
+      <BudgetWarningModal isOpen={showWarningModal} onClose={() => setShowBudgetWarningModal(false)} onConfirm={() => { setShowBudgetWarningModal(false); executeSaveActivity(); }} />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using System;
 using System.Security.Claims;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Expense;
 using TravelPlanner.Common.DTOs.Shared;
+using BackendSF.Extensions;
 
 namespace BackendSF.Controllers
 {
@@ -15,15 +17,23 @@ namespace BackendSF.Controllers
     [Route("api/expenses")]
     public class ExpensesController : ControllerBase
     {
+        private readonly IConfiguration _configuration;
+
+        public ExpensesController(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
         [HttpGet("trip/{tripId}")]
         public async Task<IActionResult> GetTripExpenses(Guid tripId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri("fabric:/TravelPlannerApp/ExpenseService"));
+            var uri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(uri));
             var result = await expenseService.GetTripExpensesAsync(tripId, Guid.Parse(userIdClaim));
-            return Ok(result);
+            return result.ToActionResult();
         }
 
         [HttpGet("trip/{tripId}/summary")]
@@ -32,9 +42,10 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri("fabric:/TravelPlannerApp/ExpenseService"));
+            var uri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(uri));
             var result = await expenseService.GetBudgetSummaryAsync(tripId, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpPost]
@@ -43,9 +54,10 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri("fabric:/TravelPlannerApp/ExpenseService"));
+            var uri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(uri));
             var result = await expenseService.AddExpenseAsync(request, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpGet("{id}")]
@@ -54,9 +66,10 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri("fabric:/TravelPlannerApp/ExpenseService"));
+            var uri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(uri));
             var result = await expenseService.GetExpenseByIdAsync(id, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : NotFound(result);
+            return result.ToActionResult();
         }
 
         [HttpPut("{id}")]
@@ -65,9 +78,10 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri("fabric:/TravelPlannerApp/ExpenseService"));
+            var uri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(uri));
             var result = await expenseService.UpdateExpenseAsync(id, request, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpDelete("{id}")]
@@ -76,9 +90,10 @@ namespace BackendSF.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
 
-            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri("fabric:/TravelPlannerApp/ExpenseService"));
+            var uri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+            var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(uri));
             var result = await expenseService.DeleteExpenseAsync(id, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
     }
 }

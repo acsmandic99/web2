@@ -1,20 +1,21 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.ServiceFabric.Services.Communication.Runtime;
-using Microsoft.ServiceFabric.Services.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
+using Microsoft.ServiceFabric.Services.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Fabric;
-using System.IO;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
-using TravelPlanner.Common.Interfaces;
+using System.Threading.Tasks;
 using TravelPlanner.Common.DTOs.Auth;
 using TravelPlanner.Common.DTOs.Shared;
+using TravelPlanner.Common.DTOs.User;
+using TravelPlanner.Common.Interfaces;
 using UserService.Data;
 using UserService.Entities;
 
@@ -73,6 +74,51 @@ namespace UserService
 
             string token = GenerateJwtToken(user);
             return ResultDto<string>.Success(token, "Login successful.");
+        }
+
+        public async Task<ResultDto<UserDto>> GetUserByIdAsync(Guid userId)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null) return ResultDto<UserDto>.Failure("User not found.");
+
+            var dto = new UserDto
+            {
+                Id = user.Id,
+                Username = user.Name,
+                Email = user.Email
+            };
+            return ResultDto<UserDto>.Success(dto, "User retrieved successfully.");
+        }
+
+        public async Task<ResultDto<bool>> UpdateProfileAsync(Guid userId, UpdateProfileDto request)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null) return ResultDto<bool>.Failure("User not found.");
+
+            if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+            {
+                return ResultDto<bool>.Failure("Incorrect current password.");
+            }
+
+            if (!string.IsNullOrEmpty(request.Email) && user.Email != request.Email)
+            {
+                var emailExists = await dbContext.Users.AnyAsync(u => u.Email == request.Email && u.Id != userId);
+                if (emailExists)
+                {
+                    return ResultDto<bool>.Failure("Email address is already in use by another account.");
+                }
+                user.Email = request.Email;
+            }
+
+            if (!string.IsNullOrEmpty(request.NewPassword))
+            {
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            }
+
+            await dbContext.SaveChangesAsync();
+            return ResultDto<bool>.Success(true, "Profile updated successfully.");
         }
 
         private string GenerateJwtToken(User user)

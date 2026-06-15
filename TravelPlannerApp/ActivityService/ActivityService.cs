@@ -56,7 +56,7 @@ namespace ActivityService
                     var shareServiceUri = _configuration["ServiceFabricSettings:ShareServiceUri"];
                     var shareService = ServiceProxy.Create<IShareService>(new Uri(shareServiceUri), new ServicePartitionKey(0L));
                     var access = await shareService.CheckAccessAsync(tripId, userId);
-                    if (!access.IsSuccess || access.Data != "Edit")
+                    if (!access.IsSuccess || access.Data != "Editor")
                     {
                         return "You do not have permission to modify data on this trip plan.";
                     }

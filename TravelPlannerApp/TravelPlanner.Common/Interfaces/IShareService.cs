@@ -15,5 +15,7 @@ namespace TravelPlanner.Common.Interfaces
         Task<ResultDto<string>> CheckAccessAsync(Guid tripId, Guid userId);
         Task<ResultDto<List<Guid>>> GetSharedUsersAsync(Guid tripId);
         Task<ResultDto<bool>> ClearAllSharesForTripAsync(Guid tripId);
+        Task<ResultDto<bool>> UpdateUserPermissionAsync(Guid tripId, Guid userId, string accessLevel);
+        Task<ResultDto<bool>> RevokeUserPermissionAsync(Guid tripId, Guid userId);
     }
 }

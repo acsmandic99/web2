@@ -8,6 +8,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Checklist;
+using BackendSF.Extensions;
 
 namespace BackendSF.Controllers
 {
@@ -32,7 +33,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
             var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.AddItemAsync(request, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpGet("trip/{tripId}")]
@@ -44,7 +45,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
             var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.GetItemsAsync(tripId, Guid.Parse(userIdClaim));
-            return Ok(result);
+            return result.ToActionResult();
         }
 
         [HttpPut("trip/{tripId}/item/{itemId}/toggle")]
@@ -56,7 +57,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
             var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.ToggleItemAsync(tripId, itemId, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpDelete("trip/{tripId}/item/{itemId}")]
@@ -68,7 +69,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:ChecklistServiceUri"];
             var checklistService = ServiceProxy.Create<IChecklistService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await checklistService.DeleteItemAsync(tripId, itemId, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
     }
 }

@@ -49,8 +49,8 @@ namespace ExpenseService
             var access = await shareService.CheckAccessAsync(tripId, userId);
             if (!access.IsSuccess) return false;
 
-            if (requiresEdit) return access.Data == "Edit";
-            return access.Data == "Edit" || access.Data == "View";
+            if (requiresEdit) return access.Data == "Editor";
+            return access.Data == "Editor" || access.Data == "Viewer";
         }
 
         public async Task<ResultDto<ExpenseDto>> AddExpenseAsync(CreateExpenseDto expense, Guid userId)

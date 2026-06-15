@@ -20,4 +20,18 @@ apiClient.interceptors.request.use(
   }
 );
 
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.data) {
+      if (error.response.data.message) {
+        error.message = error.response.data.message;
+      } else if (error.response.data.Message) {
+        error.message = error.response.data.Message;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default apiClient;

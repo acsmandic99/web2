@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { tripService } from '../../services/tripService';
 import { expenseService } from '../../services/expenseService';
 import { TripDestinations } from './TripDestinations';
@@ -7,6 +8,7 @@ import { TripActivities } from './TripActivities';
 import { TripExpenses } from './TripExpenses';
 import { TripChecklist } from './TripChecklist';
 import { TripOverview } from './TripOverview';
+import { TripCollaborators } from './TripCollaborators';
 import { ShareTripModal } from './ShareTripModal';
 import { EditTripModal } from './EditTripModal';
 import type { TripDto } from '../../types/trip/TripDto';
@@ -15,9 +17,10 @@ import type { BudgetSummaryDto } from '../../types/expense/BudgetSummaryDto';
 export const TripDetails: React.FC = () => {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [trip, setTrip] = useState<TripDto | null>(null);
   const [budgetSummary, setBudgetSummary] = useState<BudgetSummaryDto | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'destinations' | 'activities' | 'expenses' | 'checklist'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'destinations' | 'activities' | 'expenses' | 'checklist' | 'collaborators'>('overview');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -34,7 +37,7 @@ export const TripDetails: React.FC = () => {
         setError(result.message);
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Access denied to this trip.');
     } finally {
       setLoading(false);
     }
@@ -68,6 +71,7 @@ export const TripDetails: React.FC = () => {
   if (error || !trip) return <div className="min-h-screen flex items-center justify-center text-red-600">{error || 'Trip plan not found.'}</div>;
 
   const isBudgetExceeded = budgetSummary ? budgetSummary.remainingBudget < 0 : false;
+  const isOwner = user?.id === trip.userId;
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -85,8 +89,12 @@ export const TripDetails: React.FC = () => {
             <button onClick={() => navigate('/dashboard')} className="text-sm font-bold text-blue-600 hover:text-blue-800 mb-2 block">&larr; Back to Dashboard</button>
             <div className="flex items-center space-x-3">
               <h1 className="text-3xl font-black text-gray-900 tracking-tight">{trip.title}</h1>
-              <button onClick={() => setIsEditModalOpen(true)} className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer">Edit</button>
-              <button onClick={handleDeleteTrip} className="text-xs font-bold text-red-600 hover:text-red-800 cursor-pointer">Delete</button>
+              {isOwner && (
+                <>
+                  <button onClick={() => setIsEditModalOpen(true)} className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer">Edit</button>
+                  <button onClick={handleDeleteTrip} className="text-xs font-bold text-red-600 hover:text-red-800 cursor-pointer">Delete</button>
+                </>
+              )}
             </div>
             <p className="text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-1 rounded-md w-fit">
               Duration: {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
@@ -115,6 +123,9 @@ export const TripDetails: React.FC = () => {
             <button onClick={() => setActiveTab('activities')} className={`pb-4 px-1 border-b-2 font-bold text-sm transition-colors cursor-pointer ${activeTab === 'activities' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Activities</button>
             <button onClick={() => setActiveTab('expenses')} className={`pb-4 px-1 border-b-2 font-bold text-sm transition-colors cursor-pointer ${activeTab === 'expenses' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Expenses & Budget</button>
             <button onClick={() => setActiveTab('checklist')} className={`pb-4 px-1 border-b-2 font-bold text-sm transition-colors cursor-pointer ${activeTab === 'checklist' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Packing List</button>
+            {isOwner && (
+              <button onClick={() => setActiveTab('collaborators')} className={`pb-4 px-1 border-b-2 font-bold text-sm transition-colors cursor-pointer ${activeTab === 'collaborators' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Collaborators</button>
+            )}
           </nav>
           
           <button
@@ -130,6 +141,7 @@ export const TripDetails: React.FC = () => {
         {activeTab === 'activities' && <TripActivities tripId={trip.id} isBudgetExceeded={isBudgetExceeded} onBudgetChange={fetchBudget} />}
         {activeTab === 'expenses' && <TripExpenses tripId={trip.id} budgetSummary={budgetSummary} onBudgetChange={fetchBudget} />}
         {activeTab === 'checklist' && <TripChecklist tripId={trip.id} />}
+        {activeTab === 'collaborators' && isOwner && <TripCollaborators tripId={trip.id} />}
       </div>
 
       <ShareTripModal isOpen={isShareModalOpen} tripId={trip.id} onClose={() => setIsShareModalOpen(false)} />

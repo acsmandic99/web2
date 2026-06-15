@@ -121,8 +121,9 @@ namespace ShareService
                 currentShare.ClaimedByUserId = userId;
                 await tokensDict.SetAsync(tx, token, currentShare);
 
+                string stringLevel = currentShare.AccessLevel == ShareAccessLevel.Edit ? "Editor" : "Viewer";
                 string permKey = $"{currentShare.TripId}_{userId}";
-                await permsDict.SetAsync(tx, permKey, currentShare.AccessLevel.ToString());
+                await permsDict.SetAsync(tx, permKey, stringLevel);
 
                 await tx.CommitAsync();
             }
@@ -190,6 +191,30 @@ namespace ShareService
             }
 
             return ResultDto<List<Guid>>.Success(sharedUsers, "Shared users retrieved successfully.");
+        }
+
+        public async Task<ResultDto<bool>> UpdateUserPermissionAsync(Guid tripId, Guid userId, string accessLevel)
+        {
+            var permsDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, string>>("permissions");
+            using (var tx = this.StateManager.CreateTransaction())
+            {
+                string permKey = $"{tripId}_{userId}";
+                await permsDict.SetAsync(tx, permKey, accessLevel);
+                await tx.CommitAsync();
+            }
+            return ResultDto<bool>.Success(true, "Permission updated successfully.");
+        }
+
+        public async Task<ResultDto<bool>> RevokeUserPermissionAsync(Guid tripId, Guid userId)
+        {
+            var permsDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, string>>("permissions");
+            using (var tx = this.StateManager.CreateTransaction())
+            {
+                string permKey = $"{tripId}_{userId}";
+                await permsDict.TryRemoveAsync(tx, permKey);
+                await tx.CommitAsync();
+            }
+            return ResultDto<bool>.Success(true, "Permission revoked successfully.");
         }
 
         public async Task<ResultDto<bool>> ClearAllSharesForTripAsync(Guid tripId)

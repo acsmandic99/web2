@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/apiClient';
+import { useNavigate } from 'react-router-dom';
 
 export const Register: React.FC = () => {
-  const { register } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -29,11 +30,6 @@ export const Register: React.FC = () => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long.');
-      return;
-    }
-
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -41,13 +37,19 @@ export const Register: React.FC = () => {
 
     try {
       setLoading(true);
-      await register({
+      const response = await apiClient.post('/api/auth/register', {
         username: formData.username,
         email: formData.email,
         password: formData.password
       });
+
+      if (response.data.isSuccess) {
+        navigate('/login');
+      } else {
+        setError(response.data.message || 'Registration failed.');
+      }
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Try a different username or email.');
+      setError(err.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
@@ -122,7 +124,7 @@ export const Register: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md shadow focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
+            className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md shadow focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 transition-colors cursor-pointer"
           >
             {loading ? 'Creating account...' : 'Register'}
           </button>

@@ -7,6 +7,7 @@ using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using TravelPlanner.Common.Interfaces;
+using BackendSF.Extensions;
 
 namespace BackendSF.Controllers
 {
@@ -31,7 +32,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
             var notificationService = ServiceProxy.Create<INotificationService>(new Uri(uri), new ServicePartitionKey(0L));
             var result = await notificationService.GetUserNotificationsAsync(Guid.Parse(userIdClaim));
-            return Ok(result);
+            return result.ToActionResult();
         }
     }
 }

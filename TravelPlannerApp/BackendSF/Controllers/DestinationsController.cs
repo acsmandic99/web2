@@ -7,6 +7,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Destination;
+using BackendSF.Extensions;
 
 namespace BackendSF.Controllers
 {
@@ -31,7 +32,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
             var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.GetTripDestinationsAsync(tripId, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpPost]
@@ -43,7 +44,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
             var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.AddDestinationAsync(request, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpPut("{id}")]
@@ -55,7 +56,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
             var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.UpdateDestinationAsync(id, request, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
 
         [HttpDelete("{id}")]
@@ -67,7 +68,7 @@ namespace BackendSF.Controllers
             var uri = _configuration["ServiceFabricSettings:TripServiceUri"];
             var tripService = ServiceProxy.Create<ITripService>(new Uri(uri));
             var result = await tripService.DeleteDestinationAsync(id, Guid.Parse(userIdClaim));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.ToActionResult();
         }
     }
 }

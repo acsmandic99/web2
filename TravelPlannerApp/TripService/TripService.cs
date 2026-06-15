@@ -49,8 +49,13 @@ namespace TripService
             var access = await shareService.CheckAccessAsync(tripId, userId);
 
             if (!access.IsSuccess) return false;
-            if (requiresEdit) return access.Data == "Edit";
-            return access.Data == "Edit" || access.Data == "View";
+
+            if (requiresEdit)
+            {
+                return access.Data == "Editor" || access.Data == "Edit";
+            }
+
+            return access.Data == "Editor" || access.Data == "Edit" || access.Data == "Viewer" || access.Data == "View";
         }
 
         public async Task<ResultDto<TripDto>> CreateTripAsync(CreateTripDto trip, Guid userId)
