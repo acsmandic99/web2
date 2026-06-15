@@ -7,6 +7,7 @@
         Food,
         Tickets,
         Shopping,
-        Other
+        Other,
+        Activity
     }
 }

@@ -77,8 +77,15 @@ namespace ExpenseService
 
             try
             {
+                var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+                var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
+                var tripResult = await tripService.GetTripByIdAsync(expense.TripId, userId);
+
+                var totalSpent = await dbContext.Expenses.Where(e => e.TripId == expense.TripId).SumAsync(e => e.Amount);
+
                 var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
                 var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
+
                 await notificationService.PublishEventAsync(new NotificationEventDto
                 {
                     EventType = NotificationEventType.ExpenseAdded,
@@ -86,6 +93,17 @@ namespace ExpenseService
                     TripId = newExpense.TripId,
                     CreatedAt = DateTime.UtcNow
                 });
+
+                if (tripResult.IsSuccess && tripResult.Data != null && totalSpent > tripResult.Data.EstimatedBudget)
+                {
+                    await notificationService.PublishEventAsync(new NotificationEventDto
+                    {
+                        EventType = NotificationEventType.ExpenseAdded,
+                        Message = $"CRITICAL: Budget exceeded for trip '{tripResult.Data.Title}'! Total spent: {totalSpent} EUR (Budget: {tripResult.Data.EstimatedBudget} EUR).",
+                        TripId = newExpense.TripId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
             }
             catch (Exception)
             {
@@ -157,6 +175,10 @@ namespace ExpenseService
                 return ResultDto<ExpenseDto>.Failure("No permission to modify financials on this trip.");
             }
 
+            string oldTitle = existing.Title;
+            double oldAmount = existing.Amount;
+            var oldCategory = existing.Category;
+
             existing.Title = expense.Title;
             existing.Category = expense.Category;
             existing.Amount = expense.Amount;
@@ -164,6 +186,30 @@ namespace ExpenseService
             existing.Description = expense.Description;
 
             await dbContext.SaveChangesAsync();
+
+            if (oldCategory == ExpenseCategory.Activity)
+            {
+                try
+                {
+                    var activityServiceUri = _configuration["ServiceFabricSettings:ActivityServiceUri"];
+                    var activityService = ServiceProxy.Create<IActivityService>(new Uri(activityServiceUri));
+
+                    string oldActivityName = oldTitle.StartsWith("Activity: ") ? oldTitle.Substring(10) : oldTitle;
+                    string newActivityName = expense.Title.StartsWith("Activity: ") ? expense.Title.Substring(10) : expense.Title;
+
+                    await activityService.SyncUpdateActivityFromExpenseAsync(
+                        existing.TripId,
+                        oldActivityName,
+                        (double)oldAmount,
+                        newActivityName,
+                        (double)expense.Amount
+                    );
+                }
+                catch (Exception)
+                {
+                }
+            }
+
             return ResultDto<ExpenseDto>.Success(existing.MapToDto(), "Expense updated successfully.");
         }
 
@@ -180,7 +226,53 @@ namespace ExpenseService
 
             dbContext.Expenses.Remove(existing);
             await dbContext.SaveChangesAsync();
+
+            if (existing.Category == ExpenseCategory.Activity)
+            {
+                try
+                {
+                    var activityServiceUri = _configuration["ServiceFabricSettings:ActivityServiceUri"];
+                    var activityService = ServiceProxy.Create<IActivityService>(new Uri(activityServiceUri));
+                    var activityName = existing.Title.StartsWith("Activity: ") ? existing.Title.Substring(10) : existing.Title;
+                    await activityService.SyncDeleteActivityFromExpenseAsync(existing.TripId, activityName, (double)existing.Amount);
+                }
+                catch (Exception)
+                {
+                }
+            }
+
             return ResultDto<bool>.Success(true, "Expense deleted successfully.");
+        }
+
+        public async Task<ResultDto<bool>> SyncDeleteExpenseFromActivityAsync(Guid tripId, string title, double amount)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var expense = await dbContext.Expenses
+                .FirstOrDefaultAsync(e => e.TripId == tripId && e.Title == title && Math.Abs((double)e.Amount - amount) < 0.01);
+
+            if (expense != null)
+            {
+                dbContext.Expenses.Remove(expense);
+                await dbContext.SaveChangesAsync();
+            }
+
+            return ResultDto<bool>.Success(true);
+        }
+
+        public async Task<ResultDto<bool>> SyncUpdateExpenseFromActivityAsync(Guid tripId, string oldTitle, double oldAmount, string newTitle, double newAmount)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var expense = await dbContext.Expenses
+                .FirstOrDefaultAsync(e => e.TripId == tripId && e.Title == oldTitle && Math.Abs((double)e.Amount - oldAmount) < 0.01);
+
+            if (expense != null)
+            {
+                expense.Title = newTitle;
+                expense.Amount = (double)newAmount;
+                await dbContext.SaveChangesAsync();
+            }
+
+            return ResultDto<bool>.Success(true);
         }
 
         public async Task<ResultDto<bool>> RemoveAllExpensesForTripAsync(Guid tripId)

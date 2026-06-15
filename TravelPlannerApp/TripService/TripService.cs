@@ -167,6 +167,55 @@ namespace TripService
             var existing = await dbContext.Trips.FirstOrDefaultAsync(t => t.Id == tripId);
             if (existing == null) return ResultDto<TripDto>.Failure("Trip not found.");
 
+            var destinations = await dbContext.Destinations.Where(d => d.TripId == tripId).ToListAsync();
+            foreach (var d in destinations)
+            {
+                if (d.ArrivalDate.Date < trip.StartDate.Date || d.DepartureDate.Date > trip.EndDate.Date)
+                {
+                    return ResultDto<TripDto>.Failure($"Cannot change dates. Destination '{d.Name}' falls outside the new trip range.");
+                }
+            }
+
+            try
+            {
+                var activityServiceUri = _configuration["ServiceFabricSettings:ActivityServiceUri"];
+                var activityService = ServiceProxy.Create<IActivityService>(new Uri(activityServiceUri));
+                var actResult = await activityService.GetTripActivitiesAsync(tripId, userId);
+                if (actResult.IsSuccess && actResult.Data != null)
+                {
+                    foreach (var a in actResult.Data)
+                    {
+                        if (a.ScheduledAt.Date < trip.StartDate.Date || a.ScheduledAt.Date > trip.EndDate.Date)
+                        {
+                            return ResultDto<TripDto>.Failure($"Cannot change dates. Activity '{a.Name}' is scheduled outside the new trip range.");
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            try
+            {
+                var expenseServiceUri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+                var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(expenseServiceUri));
+                var expResult = await expenseService.GetTripExpensesAsync(tripId, userId);
+                if (expResult.IsSuccess && expResult.Data != null)
+                {
+                    foreach (var e in expResult.Data)
+                    {
+                        if (e.IncurredAt.Date < trip.StartDate.Date || e.IncurredAt.Date > trip.EndDate.Date)
+                        {
+                            return ResultDto<TripDto>.Failure($"Cannot change dates. Expense '{e.Title}' is recorded outside the new trip range.");
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
             existing.Title = trip.Title;
             existing.Description = trip.Description;
             existing.StartDate = trip.StartDate;

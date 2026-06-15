@@ -5,9 +5,15 @@ using Microsoft.ServiceFabric.Services.Communication.Runtime;
 using Microsoft.ServiceFabric.Services.Remoting.Client;
 using Microsoft.ServiceFabric.Services.Remoting.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
+using System;
+using System.IO;
+using System.Collections.Generic;
 using System.Fabric;
+using System.Linq;
+using System.Threading.Tasks;
 using TravelPlanner.Common.Interfaces;
 using TravelPlanner.Common.DTOs.Activity;
+using TravelPlanner.Common.DTOs.Expense;
 using TravelPlanner.Common.DTOs.Notification;
 using TravelPlanner.Common.DTOs.Shared;
 using TravelPlanner.Common.Enums;
@@ -90,6 +96,27 @@ namespace ActivityService
             dbContext.Activities.Add(activity);
             await dbContext.SaveChangesAsync();
 
+            if (activity.Price > 0)
+            {
+                var expenseServiceUri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+                var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(expenseServiceUri));
+
+                var expenseResult = await expenseService.AddExpenseAsync(new CreateExpenseDto
+                {
+                    Title = $"Activity: {activity.Name}",
+                    Category = ExpenseCategory.Activity,
+                    Amount = activity.Price,
+                    IncurredAt = activity.ScheduledAt,
+                    Description = activity.Description,
+                    TripId = activity.TripId
+                }, userId);
+
+                if (!expenseResult.IsSuccess)
+                {
+                    return ResultDto<ActivityDto>.Failure($"Activity saved, but failed to sync expense: {expenseResult.Message}");
+                }
+            }
+
             try
             {
                 var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
@@ -135,6 +162,9 @@ namespace ActivityService
                 return ResultDto<bool>.Failure(validationError);
             }
 
+            string oldName = existing.Name;
+            double oldPrice = existing.Price;
+
             existing.Name = a.Name;
             existing.Location = a.Location;
             existing.ScheduledAt = a.ScheduledAt;
@@ -143,6 +173,42 @@ namespace ActivityService
             existing.Status = a.Status;
 
             await dbContext.SaveChangesAsync();
+
+            try
+            {
+                var expenseServiceUri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+                var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(expenseServiceUri));
+
+                if (oldPrice == 0 && a.Price > 0)
+                {
+                    await expenseService.AddExpenseAsync(new CreateExpenseDto
+                    {
+                        Title = $"Activity: {a.Name}",
+                        Category = ExpenseCategory.Activity,
+                        Amount = a.Price,
+                        IncurredAt = a.ScheduledAt,
+                        Description = a.Description,
+                        TripId = existing.TripId
+                    }, userId);
+                }
+                else if (oldPrice > 0 && a.Price == 0)
+                {
+                    await expenseService.SyncDeleteExpenseFromActivityAsync(existing.TripId, $"Activity: {oldName}", oldPrice);
+                }
+                else if (oldPrice > 0 && a.Price > 0)
+                {
+                    await expenseService.SyncUpdateExpenseFromActivityAsync(
+                        existing.TripId,
+                        $"Activity: {oldName}",
+                        oldPrice,
+                        $"Activity: {a.Name}",
+                        a.Price
+                    );
+                }
+            }
+            catch (Exception)
+            {
+            }
 
             try
             {
@@ -178,6 +244,19 @@ namespace ActivityService
             dbContext.Activities.Remove(existing);
             await dbContext.SaveChangesAsync();
 
+            if (existing.Price > 0)
+            {
+                try
+                {
+                    var expenseServiceUri = _configuration["ServiceFabricSettings:ExpenseServiceUri"];
+                    var expenseService = ServiceProxy.Create<IExpenseService>(new Uri(expenseServiceUri));
+                    await expenseService.SyncDeleteExpenseFromActivityAsync(existing.TripId, $"Activity: {existing.Name}", existing.Price);
+                }
+                catch (Exception)
+                {
+                }
+            }
+
             try
             {
                 var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
@@ -195,6 +274,37 @@ namespace ActivityService
             }
 
             return ResultDto<bool>.Success(true, "Activity removed successfully.");
+        }
+
+        public async Task<ResultDto<bool>> SyncDeleteActivityFromExpenseAsync(Guid tripId, string name, double price)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var activity = await dbContext.Activities
+                .FirstOrDefaultAsync(a => a.TripId == tripId && a.Name == name && Math.Abs(a.Price - price) < 0.01);
+
+            if (activity != null)
+            {
+                dbContext.Activities.Remove(activity);
+                await dbContext.SaveChangesAsync();
+            }
+
+            return ResultDto<bool>.Success(true);
+        }
+
+        public async Task<ResultDto<bool>> SyncUpdateActivityFromExpenseAsync(Guid tripId, string oldName, double oldPrice, string newName, double newPrice)
+        {
+            using var dbContext = _contextFactory.CreateDbContext(null);
+            var activity = await dbContext.Activities
+                .FirstOrDefaultAsync(a => a.TripId == tripId && a.Name == oldName && Math.Abs(a.Price - oldPrice) < 0.01);
+
+            if (activity != null)
+            {
+                activity.Name = newName;
+                activity.Price = newPrice;
+                await dbContext.SaveChangesAsync();
+            }
+
+            return ResultDto<bool>.Success(true);
         }
 
         public async Task<ResultDto<bool>> RemoveAllActivitiesForTripAsync(Guid tripId)

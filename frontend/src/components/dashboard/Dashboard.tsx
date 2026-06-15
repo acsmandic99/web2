@@ -2,14 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { tripService } from '../../services/tripService';
 import { CreateTripModal } from './CreateTripModal';
+import { EditProfileModal } from './EditProfileModal';
+import { useNavigate } from 'react-router-dom';
 import type { TripDto } from '../../types/trip/TripDto';
 
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [trips, setTrips] = useState<TripDto[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
   const fetchTrips = async () => {
     if (!user?.id) return;
@@ -33,6 +37,14 @@ export const Dashboard: React.FC = () => {
     fetchTrips();
   }, [user?.id]);
 
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}.${month}.${year}.`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -44,13 +56,16 @@ export const Dashboard: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-700">{user?.username}</p>
+              <button 
+                onClick={() => setIsProfileModalOpen(true)}
+                className="text-right hover:bg-gray-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <p className="text-sm font-bold text-gray-700">{user?.username}</p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
-              </div>
+              </button>
               <button
                 onClick={logout}
-                className="ml-4 py-1.5 px-3.5 bg-red-50 text-red-600 hover:bg-red-100 font-medium rounded-md text-sm transition-colors border border-red-200"
+                className="ml-4 py-1.5 px-3.5 bg-red-50 text-red-600 hover:bg-red-100 font-medium rounded-md text-sm transition-colors border border-red-200 cursor-pointer"
               >
                 Logout
               </button>
@@ -73,7 +88,7 @@ export const Dashboard: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors cursor-pointer"
             >
               Create New Trip
             </button>
@@ -98,7 +113,7 @@ export const Dashboard: React.FC = () => {
               </p>
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer"
               >
                 Add First Trip
               </button>
@@ -114,7 +129,7 @@ export const Dashboard: React.FC = () => {
                 <div className="p-5">
                   <h3 className="text-lg font-bold text-gray-900 truncate">{trip.title}</h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
+                    {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
                   </p>
                   <p className="text-sm text-gray-600 mt-3 line-clamp-3">{trip.description}</p>
                 </div>
@@ -122,7 +137,10 @@ export const Dashboard: React.FC = () => {
                   <span className="text-xs font-semibold text-gray-500">
                     Budget: <span className="text-blue-600">${trip.estimatedBudget}</span>
                   </span>
-                  <button className="text-xs font-bold text-blue-600 hover:text-blue-800">
+                  <button 
+                    onClick={() => navigate(`/trip/${trip.id}`)}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
+                  >
                     View Details &rarr;
                   </button>
                 </div>
@@ -136,6 +154,11 @@ export const Dashboard: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onTripCreated={fetchTrips}
+      />
+
+      <EditProfileModal 
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
       />
     </div>
   );

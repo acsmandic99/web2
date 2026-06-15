@@ -5,6 +5,8 @@ import { Login } from './components/auth/Login';
 import { Register } from './components/auth/Register';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Dashboard } from './components/dashboard/Dashboard';
+import { TripDetails } from './components/trip/TripDetails';
+import { ClaimShare } from './components/trip/ClaimShare';
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -29,10 +31,12 @@ export default function App() {
           element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />}
         />
 
-        <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/trip/:tripId" element={<TripDetails />} />
+            <Route path="/share/claim/:token" element={<ClaimShare />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

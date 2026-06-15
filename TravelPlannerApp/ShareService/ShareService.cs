@@ -72,58 +72,75 @@ namespace ShareService
         {
             var tokensDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, TripShareDto>>("tokens");
             var permsDict = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, string>>("permissions");
-            TripShareDto shareData = null;
 
+            TripShareDto share = null;
             using (var tx = this.StateManager.CreateTransaction())
             {
                 var result = await tokensDict.TryGetValueAsync(tx, token);
-                if (!result.HasValue)
+                if (result.HasValue)
                 {
-                    return ResultDto<bool>.Failure("Invalid share token.");
+                    share = result.Value;
                 }
+            }
 
-                var share = result.Value;
-                if (share.ClaimedByUserId != null)
+            if (share == null)
+            {
+                return ResultDto<bool>.Failure("Invalid share token.");
+            }
+
+            if (share.ClaimedByUserId != null)
+            {
+                return ResultDto<bool>.Failure("Token already claimed.");
+            }
+
+            var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
+            var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
+            var ownerResult = await tripService.GetTripOwnerAsync(share.TripId);
+
+            if (!ownerResult.IsSuccess)
+            {
+                return ResultDto<bool>.Failure("The trip associated with this token was not found.");
+            }
+
+            if (ownerResult.Data == userId)
+            {
+                return ResultDto<bool>.Failure("Owner cannot claim their own share token.");
+            }
+
+            using (var tx = this.StateManager.CreateTransaction())
+            {
+                var currentResult = await tokensDict.TryGetValueAsync(tx, token, LockMode.Update);
+                if (!currentResult.HasValue) return ResultDto<bool>.Failure("Invalid share token.");
+
+                var currentShare = currentResult.Value;
+                if (currentShare.ClaimedByUserId != null)
                 {
                     return ResultDto<bool>.Failure("Token already claimed.");
                 }
 
-                var tripServiceUri = _configuration["ServiceFabricSettings:TripServiceUri"];
-                var tripService = ServiceProxy.Create<ITripService>(new Uri(tripServiceUri));
-                var tripResult = await tripService.GetTripByIdAsync(share.TripId, userId);
-                if (tripResult.IsSuccess && tripResult.Data != null && tripResult.Data.UserId == userId)
-                {
-                    return ResultDto<bool>.Failure("Owner cannot claim their own share token.");
-                }
+                currentShare.ClaimedByUserId = userId;
+                await tokensDict.SetAsync(tx, token, currentShare);
 
-                share.ClaimedByUserId = userId;
-                await tokensDict.SetAsync(tx, token, share);
-
-                string permKey = $"{share.TripId}_{userId}";
-                await permsDict.SetAsync(tx, permKey, share.AccessLevel.ToString());
-
-                shareData = share;
+                string permKey = $"{currentShare.TripId}_{userId}";
+                await permsDict.SetAsync(tx, permKey, currentShare.AccessLevel.ToString());
 
                 await tx.CommitAsync();
             }
 
-            if (shareData != null)
+            try
             {
-                try
+                var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
+                var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
+                await notificationService.PublishEventAsync(new NotificationEventDto
                 {
-                    var notificationServiceUri = _configuration["ServiceFabricSettings:NotificationServiceUri"];
-                    var notificationService = ServiceProxy.Create<INotificationService>(new Uri(notificationServiceUri), new ServicePartitionKey(0L));
-                    await notificationService.PublishEventAsync(new NotificationEventDto
-                    {
-                        EventType = NotificationEventType.TripShareAccepted,
-                        Message = $"User {userId} accepted share for Trip {shareData.TripId} with access level {shareData.AccessLevel}",
-                        TripId = shareData.TripId,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                }
-                catch (Exception)
-                {
-                }
+                    EventType = NotificationEventType.TripShareAccepted,
+                    Message = $"User {userId} accepted share for Trip {share.TripId} with access level {share.AccessLevel}",
+                    TripId = share.TripId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception)
+            {
             }
 
             return ResultDto<bool>.Success(true, "Share token claimed successfully.");
